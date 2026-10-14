@@ -1,0 +1,35 @@
+# Modelo de datos inicial
+Especificación conceptual: TASK-002 concreta Prisma y migraciones conservando invariantes.
+
+| Entidad | Campos/relaciones principales |
+|---|---|
+| Organization | id, name, status; cliente SaaS |
+| Company | id, organization_id, legal_name, trade_name, nit, contact, address, status |
+| Branch | id, organization_id, company_id, code, name, address, contact, status |
+| User | id, normalized_email único, display_name, password_hash, status, platform_role opcional |
+| OrganizationMembership | id, organization_id, user_id, status; único por pareja |
+| Role | id, organization_id, code, name, status |
+| Permission | code único global, description; catálogo definido por código |
+| RolePermission | role_id, permission_code |
+| RoleAssignment | membership_id, role_id, scope_type, company_id?, branch_id? |
+| Session | id, user_id, created_at, expires_at, revoked_at, metadata limitada |
+| RefreshToken | session_id, token_hash único, consumed_at, expires_at, successor_id? |
+| AccountToken | user_id, purpose, token_hash, expires_at, consumed_at |
+| Employee | organization_id, company_id, internal_code, nombres, documento, contact, position_id, hire_date, status, user_id? |
+| EmployeeBranchAssignment | employee_id, branch_id |
+| EmployeeDocument | employee_id, file_id, type_id, issued_at?, expires_at? |
+| Setting | organization_id?, company_id?, key, typed_value; alcance validado |
+| BusinessHour | company_id/branch_id, weekday, intervals |
+| NumberSequence | organization_id, company_id, branch_id?, document_type, period, next_value |
+| Catalog / CatalogItem | scope, code, name, status, protected |
+| File | organization_id, company_id?, storage_key único, original_name, detected_mime, bytes, status, uploaded_by |
+| FileLink | file_id, resource_type, resource_id; política explícita por tipo |
+| AuditEvent | organization_id?, company_id?, branch_id?, actor_id?, action, resource_type/id, diff filtrado, request_id, created_at |
+| EmailTemplate | código conocido, subject/body, variables permitidas |
+| EmailOutbox | organization_id?, template, recipient, payload limitado, deduplication_key único, status, attempts, next_attempt_at |
+| EmailDelivery | outbox_id, result, timestamp, error sanitizado |
+
+## Invariantes
+tenant obligatorio en datos privados. Company/Branch y asociaciones validan mismo tenant vía claves compuestas donde aplique. branch code único por company; membership única organization/user; employee code único company. Scope ORGANIZATION no tiene company/branch; COMPANY exige company propia y branch nula; BRANCH exige branch y company consistentes. Role y membership de assignment comparten tenant. Un solo Session activo por user mediante índice parcial SQL o mecanismo transaccional equivalente verificable. Campos opcionales e índices con NULL requieren diseño explícito, no asumir unicidad PostgreSQL de NULL.
+No borrar físicamente empresas, sucursales o empleados referenciados. Archivos y tokens tienen ciclo de limpieza separado. User vinculado a empleado debe tener membresía en su organización. Vincular empleado no otorga acceso por sí mismo.
+Timestamps UTC; importes futuros decimales, nunca float. No usar catálogos editables para estados de seguridad internos. NIT es texto; no inventar validación oficial no documentada. Metadata JSON solo para datos extensibles, no para relaciones fundamentales.
