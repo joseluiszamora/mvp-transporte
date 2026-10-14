@@ -1,14 +1,6 @@
 import { createApp } from "./app.ts";
 import { createDatabasePool } from "./database.ts";
 
-function getRequiredEnvironmentValue(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`${name} es obligatorio.`);
-  }
-  return value;
-}
-
 function getPort(): number {
   const rawPort = process.env.API_PORT ?? "4000";
   const port = Number(rawPort);
@@ -18,17 +10,20 @@ function getPort(): number {
   return port;
 }
 
-const connectionString = getRequiredEnvironmentValue("DATABASE_URL");
+const connectionString = process.env.DATABASE_URL?.trim();
 const host = process.env.API_HOST?.trim() || "127.0.0.1";
 const port = getPort();
 const allowedOrigins = (process.env.WEB_ORIGINS ?? "http://127.0.0.1:5173")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const pool = createDatabasePool(connectionString);
+const pool = connectionString ? createDatabasePool(connectionString) : undefined;
 const app = createApp({
   allowedOrigins,
   checkDatabase: async () => {
+    if (!pool) {
+      throw new Error("DATABASE_URL no está configurada.");
+    }
     await pool.query("SELECT 1");
   },
 });
@@ -40,7 +35,7 @@ const server = app.listen(port, host, () => {
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   process.stdout.write(`Cerrando API (${signal}).\n`);
   server.close(async (error) => {
-    await pool.end();
+    await pool?.end();
     if (error) {
       process.exitCode = 1;
     }

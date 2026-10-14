@@ -17,6 +17,8 @@ Monorepo para una base administrativa reutilizable en instalaciones y bases de d
 
 La API queda en `http://127.0.0.1:4000`; su health check es `/api/v1/health`, readiness es `/api/v1/ready` y OpenAPI se sirve en `/api/v1/openapi.json`. La web queda en `http://127.0.0.1:5173`. Mailpit usa `http://127.0.0.1:8025` para su bandeja y `127.0.0.1:1025` para SMTP.
 
+Si todavía no configuraste PostgreSQL, la API puede iniciar sin `DATABASE_URL`: health responde normalmente y readiness devuelve `503` hasta que la conexión esté disponible. No hace falta configurar una base real para revisar el shell web.
+
 ## Migraciones y seed
 
 TASK-001 no crea todavía el modelo de negocio, migraciones ni cuentas iniciales. TASK-002 añadirá el esquema Prisma y los comandos de migración; las tareas posteriores definirán datos de desarrollo seguros. No existe una cuenta inicial con contraseña fija.
