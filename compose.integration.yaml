@@ -1,0 +1,17 @@
+services:
+  integration-db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: mvp_test
+      POSTGRES_PASSWORD: mvp_test_password
+      POSTGRES_DB: mvp_integration
+    ports:
+      - "127.0.0.1:${TEST_POSTGRES_HOST_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s

@@ -1,0 +1,28 @@
+{
+  "name": "mvp-transporte",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.17.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/contracts"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @mvp-transporte/api",
+    "dev:web": "npm run dev --workspace @mvp-transporte/web",
+    "lint": "biome lint .",
+    "typecheck": "npm run build --workspace @mvp-transporte/contracts && npm run typecheck --workspace @mvp-transporte/api && npm run typecheck --workspace @mvp-transporte/web",
+    "test": "npm run build --workspace @mvp-transporte/contracts && npm run test --workspace @mvp-transporte/api",
+    "build": "npm run build --workspace @mvp-transporte/contracts && npm run build --workspace @mvp-transporte/api && npm run build --workspace @mvp-transporte/web",
+    "test:integration": "npm run build --workspace @mvp-transporte/contracts && npm run build --workspace @mvp-transporte/api && node scripts/test-integration.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "typescript": "7.0.2"
+  }
+}
