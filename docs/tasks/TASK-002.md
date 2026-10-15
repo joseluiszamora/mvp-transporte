@@ -1,5 +1,5 @@
 # TASK-002 — Modelo de datos y políticas
-Estado: pendiente. Dependencias: 001. Issue GitHub: no creada.
+Estado: en revisión técnica; aceptación funcional pendiente del propietario. Dependencias: 001. Issue GitHub: [#2](https://github.com/joseluiszamora/mvp-transporte/issues/2).
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -8,7 +8,7 @@ Prisma y migraciones para organizaciones, empresas, usuarios, membresías, roles
 Distribución, móvil, suscripciones, Google, 2FA y despliegue productivo. No ampliar arquitectura sin decisión documentada.
 ## Criterios de aceptación
 FKs impiden asociaciones ajenas; scopes validados; seed de dos tenants y fixtures solo desarrollo; migraciones sobre BD vacía.
-Completar backend y UI descritos; manejar errores, estados vacíos/carga y autorización. No reportar como terminado si falta criterio; enumerar pendiente/bloqueo.
+Completar backend y cualquier UI expresamente incluida en el alcance. TASK-002 no describe pantallas; no agrega UI. Manejar errores y autorización en los servicios definidos. No reportar como terminado si falta criterio; enumerar pendiente/bloqueo.
 ## Validación
 Ejecutar checks raíz disponibles; tests integración en BD desechable para invariantes afectados. TASK-001 establece comandos. Adjuntar resultado real y prueba manual cuando UI cambie.
 ## Entrega

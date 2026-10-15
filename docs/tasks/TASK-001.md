@@ -1,5 +1,5 @@
 # TASK-001 — Fundamentos
-Estado: aceptación funcional recibida del propietario (14/10/2026); revisión técnica e integración pendientes. Dependencias: —. Issue GitHub: [#1](https://github.com/joseluiszamora/mvp-transporte/issues/1).
+Estado: integrada y aceptada funcionalmente por el propietario (15/10/2026). PR [#14](https://github.com/joseluiszamora/mvp-transporte/pull/14) fusionado en `main`; commit de merge `7332a684fa9a5c88e80e47499006ce2d4f021674`; CI `success`. Issue [#1](https://github.com/joseluiszamora/mvp-transporte/issues/1) cerrada. Dependencias: —.
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance

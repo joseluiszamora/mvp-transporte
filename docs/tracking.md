@@ -8,3 +8,7 @@ Implementado; criterios cumplidos/pendientes; comandos con resultado; pruebas ma
 Probar flujo feliz, errores, usuario limitado, otra empresa/tenant; comparar criterio con evidencia. No aceptar por compilación solamente.
 ## Semana de revisión
 Día 1: arranque/tenant; 2: login/sesiones; 3: roles/alcances; 4: catálogos/config; 5: personal/archivos; 6: SMTP/audit; 7: regresión/backup. Agenda aplicable cuando entregas estén disponibles; no exige implementar todo en esa semana.
+
+## Estado verificado 15/10/2026
+- TASK-001: aceptación funcional confirmada por el propietario; PR #14 integrado en `main`, CI aprobada y issue #1 cerrada.
+- TASK-002: issue #2 abierta; trabajo en `task/002-modelo-y-politicas`. Mantenerla en revisión hasta aceptación funcional. No aplicar migraciones a producción.
