@@ -4,7 +4,7 @@ Diez módulos antes de distribución. Orden por dependencia, no por numeración 
 
 | Tarea | Entrega | Depende de | Estado |
 |---|---|---|---|
-| TASK-001 | Fundamentos | — | Pendiente |
+| TASK-001 | Fundamentos | — | En revisión |
 | TASK-002 | Modelo de datos y políticas | 001 | Pendiente |
 | TASK-003 | Auditoría y correo mínimos | 002 | Pendiente |
 | TASK-004 | Autenticación y alta administrativa | 003 | Pendiente |

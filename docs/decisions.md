@@ -19,3 +19,10 @@ npm workspaces, API /api/v1, activación 24h/recuperación 30min, máximo inicia
 ## Registro de nuevos cambios
 Fecha | decisión | motivo | alternativas | impacto | estado/proponente.
 No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versiones recordadas sin comprobar compatibilidad.
+
+## Implementación de TASK-001
+- 14/10/2026: shell web con MUI 9 + Emotion, React Router 7 y TanStack Query 5. MUI resuelve componentes y tema; React Router cubre la SPA prevista; TanStack Query gestiona estados de consulta API. Aplicación: shell base; no introduce permisos ni datos de negocio.
+- 14/10/2026: runtime Node 24 LTS, npm 11, Express 5, React 19 y Vite 8; versiones exactas guardadas en `package-lock.json`. Las versiones se comprobaron al implementar y compilar.
+- 14/10/2026: readiness consulta PostgreSQL mediante `pg` con `SELECT 1`, responde 503 sin detalles ante fallos. Prisma, modelo y migraciones siguen reservados para TASK-002.
+- 14/10/2026: `test:integration` inicia PostgreSQL 18 en almacenamiento temporal `tmpfs` con un proyecto Compose aislado y lo elimina al finalizar; no usa una URL configurada por el usuario.
+- 14/10/2026: la API inicia aunque `DATABASE_URL` no esté configurada; `/health` informa liveness y `/ready` responde 503 sin detalles. Esto permite levantar y revisar el shell antes de habilitar PostgreSQL.
