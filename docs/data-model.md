@@ -21,7 +21,8 @@ Especificación conceptual: TASK-002 concreta Prisma y migraciones conservando i
 | Setting | organization_id?, company_id?, key, typed_value; alcance validado |
 | BusinessHour | company_id/branch_id, weekday, intervals |
 | NumberSequence | organization_id, company_id, branch_id?, document_type, period, next_value |
-| Catalog / CatalogItem | scope, code, name, status, protected |
+| Catalog | id, code, name, description?, scope (`GLOBAL`/`ORGANIZATION`/`COMPANY`), organization_id?, company_id?, status, is_protected |
+| CatalogItem | id, catalog_id, code, name, description?, status; UUID estable para referencias históricas |
 | File | organization_id, company_id?, storage_key único, original_name, detected_mime, bytes, status, uploaded_by |
 | FileLink | file_id, resource_type, resource_id; política explícita por tipo |
 | AuditEvent | organization_id?, company_id?, branch_id?, actor_id?, action, resource_type/id, diff filtrado, request_id, created_at |
@@ -33,3 +34,5 @@ Especificación conceptual: TASK-002 concreta Prisma y migraciones conservando i
 tenant obligatorio en datos privados. Company/Branch y asociaciones validan mismo tenant vía claves compuestas donde aplique. branch code único por company; membership única organization/user; employee code único company. Scope ORGANIZATION no tiene company/branch; COMPANY exige company propia y branch nula; BRANCH exige branch y company consistentes. Role y membership de assignment comparten tenant. Un solo Session activo por user mediante índice parcial SQL o mecanismo transaccional equivalente verificable. Campos opcionales e índices con NULL requieren diseño explícito, no asumir unicidad PostgreSQL de NULL.
 No borrar físicamente empresas, sucursales o empleados referenciados. Archivos y tokens tienen ciclo de limpieza separado. User vinculado a empleado debe tener membresía en su organización. Vincular empleado no otorga acceso por sí mismo.
 Timestamps UTC; importes futuros decimales, nunca float. No usar catálogos editables para estados de seguridad internos. NIT es texto; no inventar validación oficial no documentada. Metadata JSON solo para datos extensibles, no para relaciones fundamentales.
+
+Los catálogos `GLOBAL` no tienen tenant/empresa y deben estar protegidos. Los de organización requieren `organization_id`; los de empresa requieren organización y una FK compuesta a una empresa de ese tenant. Índices únicos parciales separan el código global, el código por tenant y el código por empresa; las opciones son únicas por catálogo. API normaliza códigos a mayúsculas. Desactivar conserva filas; las FKs futuras a `CatalogItem` deben usar `RESTRICT`, y los módulos consumidores solo ofrecerán opciones activas de catálogos activos.

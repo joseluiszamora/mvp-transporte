@@ -1,5 +1,5 @@
 # TASK-006 — Organizaciones empresas sucursales
-Estado: implementación local validada; revisión técnica/CI y aceptación funcional pendientes. Dependencias: 005. Issue GitHub: [#6](https://github.com/joseluiszamora/mvp-transporte/issues/6).
+Estado: integrada en `main` mediante PR #19; CI aprobada; aceptación funcional pendiente del propietario. Dependencias: 005. Issue GitHub: [#6](https://github.com/joseluiszamora/mvp-transporte/issues/6).
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -20,4 +20,5 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - ADM-02 puede suspender/reactivar membresías aceptadas sin cambiar el estado global de la cuenta. Se protege al último administrador y se auditan las mutaciones.
 - No requiere migración: el esquema de TASK-002 ya contiene entidades, estados y restricciones necesarias.
 - Validación local: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` y `npm run test:integration` pasaron. La integración usó PostgreSQL/Mailpit desechables y probó aislamiento, alcance, unicidad, estados, auditoría y protección del último administrador.
-- Pendiente: revisión técnica y CI del PR, más revisión funcional del propietario. No se desplegó producción ni se migró una base persistente.
+- PR #19 integrado con merge commit `f2bf803746afd9158fdb5e3095512f576d94aeb1`; CI run #14 aprobó lint, typecheck, tests unitarios, build e integración PostgreSQL desechable.
+- Pendiente: aceptación funcional del propietario. No se desplegó producción ni se migró una base persistente.

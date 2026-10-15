@@ -40,6 +40,12 @@ enum ScopeType {
   BRANCH
 }
 
+enum CatalogScope {
+  GLOBAL
+  ORGANIZATION
+  COMPANY
+}
+
 enum AccountTokenPurpose {
   ACTIVATION
   PASSWORD_RECOVERY
@@ -74,6 +80,7 @@ model Organization {
   assignments RoleAssignment[]
   auditEvents AuditEvent[]
   emailOutbox EmailOutbox[]
+  catalogs     Catalog[]
 
   @@map("organizations")
 }
@@ -93,6 +100,7 @@ model Company {
   branches       Branch[]
   assignments    RoleAssignment[] @relation("RoleAssignmentCompany")
   auditEvents    AuditEvent[] @relation("AuditEventCompany")
+  catalogs       Catalog[]
 
   @@unique([id, organizationId], map: "companies_id_organization_id_key")
   @@index([organizationId, status], map: "companies_organization_status_idx")
@@ -347,4 +355,45 @@ model EmailDelivery {
   @@unique([outboxId, attempt], map: "email_deliveries_outbox_attempt_key")
   @@index([outboxId, createdAt], map: "email_deliveries_outbox_created_idx")
   @@map("email_deliveries")
+}
+
+model Catalog {
+  id             String       @id @default(uuid()) @db.Uuid
+  code           String       @db.VarChar(80)
+  name           String       @db.VarChar(160)
+  description    String?      @db.VarChar(500)
+  scope          CatalogScope
+  organizationId String?      @map("organization_id") @db.Uuid
+  companyId      String?      @map("company_id") @db.Uuid
+  status         RecordStatus @default(ACTIVE)
+  isProtected    Boolean      @default(false) @map("is_protected")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company?     @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  items          CatalogItem[]
+
+  @@unique([code], where: raw("\"scope\" = 'GLOBAL'"), map: "catalogs_global_code_key")
+  @@unique([organizationId, code], where: raw("\"scope\" = 'ORGANIZATION'"), map: "catalogs_organization_code_key")
+  @@unique([companyId, code], where: raw("\"scope\" = 'COMPANY'"), map: "catalogs_company_code_key")
+  @@index([scope, status], map: "catalogs_scope_status_idx")
+  @@index([organizationId, scope, status], map: "catalogs_organization_scope_status_idx")
+  @@index([companyId, status], map: "catalogs_company_status_idx")
+  @@map("catalogs")
+}
+
+model CatalogItem {
+  id          String       @id @default(uuid()) @db.Uuid
+  catalogId   String       @map("catalog_id") @db.Uuid
+  code        String       @db.VarChar(80)
+  name        String       @db.VarChar(160)
+  description String?      @db.VarChar(500)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  catalog     Catalog      @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+
+  @@unique([catalogId, code], map: "catalog_items_catalog_code_key")
+  @@index([catalogId, status, name], map: "catalog_items_catalog_status_name_idx")
+  @@map("catalog_items")
 }

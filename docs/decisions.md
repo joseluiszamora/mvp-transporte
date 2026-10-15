@@ -59,3 +59,10 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 - 15/10/2026: empresas y sucursales conservan filas históricas al desactivarse. `companies.update`/`branches.update` autorizan reactivación, mientras `companies.deactivate`/`branches.deactivate` autorizan desactivación; una empresa inactiva impide escribir en sus sucursales.
 - 15/10/2026: ADM-02 permite suspender solo membresías aceptadas; las invitaciones se controlan con su enlace de un solo uso. Suspender/reactivar nunca cambia el User global y usa el mismo advisory lock de gestión de roles para proteger la regla del último administrador.
 - 15/10/2026: no se añade migración; TASK-002 ya representa organización, empresa, sucursal, estados, unicidad y claves foráneas compuestas. La integración aplica solo esas migraciones existentes a una base desechable.
+- 15/10/2026: TASK-006 se integró en `main` por PR #19 con CI #14 aprobada. Issue #6 permanece abierta hasta aceptación funcional.
+
+## Implementación de TASK-007
+
+- 15/10/2026: los catálogos tienen alcances `GLOBAL`, `ORGANIZATION` y `COMPANY`. Los globales son protegidos y de solo lectura para clientes; la gestión de catálogos propios exige `catalogs.manage` en el mismo alcance. Los permisos de sucursal no se amplían a una empresa porque el catálogo no tiene alcance sucursal.
+- 15/10/2026: la migración crea catálogos globales protegidos de tipos de documento y cargos con opciones generales, no específicas de transporte. La organización o empresa puede crear catálogos propios incluso con el mismo código porque la unicidad es por scope; las opciones son únicas dentro de su catálogo.
+- 15/10/2026: los códigos se normalizan a mayúsculas y el código de catálogo es inmutable tras crearlo; las bajas son lógicas y conservan IDs para referencias. Una opción no se ofrece para nuevos registros si el catálogo padre está inactivo. La migración y el seed se validan en la base desechable; no se modifica la base persistente local.

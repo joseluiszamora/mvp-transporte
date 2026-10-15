@@ -143,6 +143,27 @@ async function verifyDataModel(database) {
 
   const tenantA = seeded.rows[0];
   const tenantB = seeded.rows[1];
+  const protectedCatalogs = await database.query(
+    `SELECT count(*)::int AS total FROM catalogs WHERE scope = 'GLOBAL' AND is_protected = true
+       AND code IN ('EMPLOYEE_DOCUMENT_TYPE', 'EMPLOYEE_POSITION')`,
+  );
+  assert.equal(protectedCatalogs.rows[0].total, 2, "La migración debe sembrar los catálogos globales protegidos de documentos y cargos.");
+  const protectedItems = await database.query(
+    `SELECT count(*)::int AS total FROM catalog_items AS item
+     JOIN catalogs AS catalog ON catalog.id = item.catalog_id
+     WHERE catalog.scope = 'GLOBAL' AND catalog.is_protected = true AND item.status = 'ACTIVE'`,
+  );
+  assert.equal(protectedItems.rows[0].total, 11, "Los seeds deben incluir tipos de documento y cargos generales.");
+
+  await expectPostgresCode(
+    database.query(
+      `INSERT INTO catalogs (id, code, name, scope, organization_id, company_id, is_protected, updated_at)
+       VALUES ($1::uuid, 'CROSS_TENANT', 'Catálogo inválido', 'COMPANY', $2::uuid, $3::uuid, false, CURRENT_TIMESTAMP)`,
+      [randomUUID(), tenantA.organization_id, tenantB.company_id],
+    ),
+    "23503",
+    "La FK compuesta debe impedir asociar un catálogo con una empresa de otro tenant.",
+  );
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   await expectPostgresCode(
@@ -651,6 +672,29 @@ async function verifyRoleManagement(database, createApp) {
      VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'ORGANIZATION')`,
     [adminAssignmentId, organizationId, adminMembershipId, adminRoleResult.rows[0].id],
   );
+  const tenantBResult = await database.query("SELECT id FROM organizations WHERE id <> $1::uuid ORDER BY name LIMIT 1", [organizationId]);
+  assert.ok(tenantBResult.rows[0]);
+  const tenantBId = tenantBResult.rows[0].id;
+  const tenantBAdminId = randomUUID();
+  const tenantBMembershipId = randomUUID();
+  const tenantBAdminEmail = `task005.admin.b.${marker}@example.test`;
+  await database.query(
+    `INSERT INTO users (id, normalized_email, display_name, password_hash, status, updated_at)
+     VALUES ($1::uuid, $2, 'Administración B de catálogos', $3, 'ACTIVE', CURRENT_TIMESTAMP)`,
+    [tenantBAdminId, tenantBAdminEmail, passwordHash],
+  );
+  await database.query(
+    `INSERT INTO organization_memberships (id, organization_id, user_id, status, updated_at)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, 'ACTIVE', CURRENT_TIMESTAMP)`,
+    [tenantBMembershipId, tenantBId, tenantBAdminId],
+  );
+  const tenantBAdminRole = await database.query("SELECT id FROM roles WHERE organization_id = $1::uuid AND code = 'admin'", [tenantBId]);
+  assert.ok(tenantBAdminRole.rows[0]);
+  await database.query(
+    `INSERT INTO role_assignments (id, organization_id, membership_id, role_id, scope_type)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'ORGANIZATION')`,
+    [randomUUID(), tenantBId, tenantBMembershipId, tenantBAdminRole.rows[0].id],
+  );
 
   const settings = {
     accessTokenSecret: Buffer.alloc(32, 57).toString("base64"),
@@ -676,6 +720,96 @@ async function verifyRoleManagement(database, createApp) {
     const adminLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: adminEmail, password } });
     assert.equal(adminLogin.response.status, 200);
     const adminToken = adminLogin.body.accessToken;
+
+    const globalCatalogPage = await apiRequest(baseUrl, "/catalogs?limit=100", { accessToken: adminToken });
+    assert.equal(globalCatalogPage.response.status, 200);
+    const documentCatalog = globalCatalogPage.body.items.find((item) => item.code === "EMPLOYEE_DOCUMENT_TYPE");
+    const positionCatalog = globalCatalogPage.body.items.find((item) => item.code === "EMPLOYEE_POSITION");
+    assert.ok(documentCatalog && positionCatalog, "La membresía debe consultar los catálogos globales sembrados.");
+    assert.equal(documentCatalog.protected, true);
+    assert.equal(documentCatalog.canManage, false, "Los catálogos globales se presentan como solo lectura.");
+    const documentItems = await apiRequest(baseUrl, `/catalogs/${documentCatalog.id}/items?limit=100&status=ACTIVE`, { accessToken: adminToken });
+    assert.equal(documentItems.response.status, 200);
+    assert.ok(documentItems.body.items.some((item) => item.code === "IDENTITY_CARD"));
+    const protectedCatalogUpdate = await apiRequest(baseUrl, `/catalogs/${documentCatalog.id}`, {
+      method: "PATCH", accessToken: adminToken, body: { name: "Intento de cambio" },
+    });
+    assert.equal(protectedCatalogUpdate.response.status, 403, "Un admin de tenant no puede modificar catálogos globales protegidos.");
+    const protectedItemCreate = await apiRequest(baseUrl, `/catalogs/${documentCatalog.id}/items`, {
+      method: "POST", accessToken: adminToken, body: { code: "CUSTOM", name: "No permitido" },
+    });
+    assert.equal(protectedItemCreate.response.status, 403, "Un admin de tenant no puede agregar opciones a catálogos globales protegidos.");
+
+    const sharedCatalogCode = `SCOPED_${marker.slice(0, 8).toUpperCase()}`;
+    const organizationCatalog = await apiRequest(baseUrl, "/catalogs", {
+      method: "POST", accessToken: adminToken,
+      body: { code: sharedCatalogCode, name: "Clasificación del tenant", scope: "ORGANIZATION" },
+    });
+    assert.equal(organizationCatalog.response.status, 201);
+    assert.equal(organizationCatalog.body.canManage, true);
+    const organizationCatalogItem = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items`, {
+      method: "POST", accessToken: adminToken, body: { code: "cash", name: "Efectivo" },
+    });
+    assert.equal(organizationCatalogItem.response.status, 201);
+    assert.equal(organizationCatalogItem.body.code, "CASH");
+    const activeCatalogItem = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items`, {
+      method: "POST", accessToken: adminToken, body: { code: "TRANSFER", name: "Transferencia" },
+    });
+    assert.equal(activeCatalogItem.response.status, 201);
+    const duplicateCatalogItem = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items`, {
+      method: "POST", accessToken: adminToken, body: { code: "Cash", name: "Duplicado" },
+    });
+    assert.equal(duplicateCatalogItem.response.status, 409, "Los códigos de opción se normalizan y son únicos dentro del catálogo.");
+    const deactivateCatalogItemResult = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items/${organizationCatalogItem.body.id}`, {
+      method: "DELETE", accessToken: adminToken,
+    });
+    assert.equal(deactivateCatalogItemResult.response.status, 204);
+    const inactiveCatalogItems = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items?status=INACTIVE`, { accessToken: adminToken });
+    assert.equal(inactiveCatalogItems.response.status, 200);
+    assert.ok(inactiveCatalogItems.body.items.some((item) => item.id === organizationCatalogItem.body.id && item.status === "INACTIVE"), "Desactivar una opción conserva su ID e historial.");
+    const inactiveCatalogItemRows = await database.query("SELECT id, status FROM catalog_items WHERE id = $1::uuid", [organizationCatalogItem.body.id]);
+    assert.equal(inactiveCatalogItemRows.rows[0]?.status, "INACTIVE", "La desactivación no borra la fila del catálogo.");
+    const deactivateCatalogResult = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(deactivateCatalogResult.response.status, 204);
+    const inactiveCatalogRows = await database.query("SELECT id, status FROM catalogs WHERE id = $1::uuid", [organizationCatalog.body.id]);
+    assert.equal(inactiveCatalogRows.rows[0]?.status, "INACTIVE", "La desactivación no borra el catálogo.");
+    const activeItemsOfInactiveCatalog = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items?status=ACTIVE`, { accessToken: adminToken });
+    assert.equal(activeItemsOfInactiveCatalog.response.status, 200);
+    assert.equal(activeItemsOfInactiveCatalog.body.total, 0, "Un catálogo inactivo no ofrece opciones para nuevos registros.");
+
+    const companyCatalog = await apiRequest(baseUrl, "/catalogs", {
+      method: "POST", accessToken: adminToken,
+      body: { code: sharedCatalogCode, name: "Clasificación de empresa", scope: "COMPANY", companyId },
+    });
+    assert.equal(companyCatalog.response.status, 201, "El mismo código se permite en alcances diferentes.");
+    const duplicateCompanyCatalog = await apiRequest(baseUrl, "/catalogs", {
+      method: "POST", accessToken: adminToken,
+      body: { code: sharedCatalogCode.toLowerCase(), name: "Duplicado de empresa", scope: "COMPANY", companyId },
+    });
+    assert.equal(duplicateCompanyCatalog.response.status, 409, "El código es único dentro de la empresa y no distingue mayúsculas.");
+    const otherCompanyCatalog = await apiRequest(baseUrl, "/catalogs", {
+      method: "POST", accessToken: adminToken,
+      body: { code: sharedCatalogCode, name: "Clasificación de otra empresa", scope: "COMPANY", companyId: otherCompanyId },
+    });
+    assert.equal(otherCompanyCatalog.response.status, 201, "Un código puede reutilizarse en otra empresa.");
+    const catalogScopeOptions = await apiRequest(baseUrl, "/catalogs/scope-options?limit=100", { accessToken: adminToken });
+    assert.equal(catalogScopeOptions.response.status, 200);
+    assert.equal(catalogScopeOptions.body.organization, true);
+    assert.ok(catalogScopeOptions.body.companies.some((item) => item.id === companyId));
+
+    const tenantBLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: tenantBAdminEmail, password } });
+    assert.equal(tenantBLogin.response.status, 200);
+    const tenantBToken = tenantBLogin.body.accessToken;
+    const tenantBCatalog = await apiRequest(baseUrl, "/catalogs", {
+      method: "POST", accessToken: tenantBToken,
+      body: { code: sharedCatalogCode, name: "Clasificación del tenant B", scope: "ORGANIZATION" },
+    });
+    assert.equal(tenantBCatalog.response.status, 201, "La unicidad de códigos no se extiende a otros tenants.");
+    const crossTenantCatalogRead = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items`, { accessToken: tenantBToken });
+    assert.equal(crossTenantCatalogRead.response.status, 404, "Un tenant no puede leer opciones de catálogos ajenos.");
+    const tenantBCatalogList = await apiRequest(baseUrl, "/catalogs?limit=100", { accessToken: tenantBToken });
+    assert.equal(tenantBCatalogList.response.status, 200);
+    assert.ok(!tenantBCatalogList.body.items.some((item) => item.id === organizationCatalog.body.id), "El listado no debe revelar catálogos de otros tenants.");
 
     const companyCreated = await apiRequest(baseUrl, "/organizations/companies", {
       method: "POST", accessToken: adminToken,
@@ -778,7 +912,7 @@ async function verifyRoleManagement(database, createApp) {
       return result.body;
     }
     const organizationReader = await createRole(`Lectura de tenant ${marker}`, ["catalogs.read"]);
-    const companyReader = await createRole(`Lectura de empresa ${marker}`, ["companies.read"]);
+    const companyReader = await createRole(`Lectura de empresa ${marker}`, ["companies.read", "catalogs.read"]);
     const branchReader = await createRole(`Lectura de sucursal ${marker}`, ["branches.read"]);
     const branchManager = await createRole(`Gestión de sucursal ${marker}`, ["roles.assign"]);
     const usersReader = await createRole(`Lectura de usuarios ${marker}`, ["users.read"]);
@@ -833,6 +967,25 @@ async function verifyRoleManagement(database, createApp) {
     const scopedBranches = await apiRequest(baseUrl, `/organizations/branches?companyId=${companyId}&limit=100`, { accessToken: recipientToken });
     assert.equal(scopedBranches.response.status, 200);
     assert.deepEqual(scopedBranches.body.items.map((item) => item.id), [branchId], "Una autorización de sucursal solo lista esa sucursal.");
+
+    const removeOrganizationCatalogRead = await apiRequest(baseUrl, `/organizations/roles/${organizationReader.id}`, {
+      method: "PATCH", accessToken: adminToken, body: { status: "INACTIVE" },
+    });
+    assert.equal(removeOrganizationCatalogRead.response.status, 200);
+    const companyScopedCatalogs = await apiRequest(baseUrl, "/catalogs?limit=100", { accessToken: recipientToken });
+    assert.equal(companyScopedCatalogs.response.status, 200);
+    assert.ok(companyScopedCatalogs.body.items.some((item) => item.id === documentCatalog.id), "El permiso de alcance empresa puede consultar catálogos globales protegidos.");
+    assert.ok(companyScopedCatalogs.body.items.some((item) => item.id === companyCatalog.body.id));
+    assert.ok(!companyScopedCatalogs.body.items.some((item) => item.id === otherCompanyCatalog.body.id), "El alcance empresa no permite listar catálogos de otra empresa.");
+    assert.ok(!companyScopedCatalogs.body.items.some((item) => item.id === organizationCatalog.body.id), "El alcance empresa no se amplía a catálogos de organización.");
+    const companyCatalogItems = await apiRequest(baseUrl, `/catalogs/${companyCatalog.body.id}/items`, { accessToken: recipientToken });
+    assert.equal(companyCatalogItems.response.status, 200);
+    const otherCompanyCatalogItems = await apiRequest(baseUrl, `/catalogs/${otherCompanyCatalog.body.id}/items`, { accessToken: recipientToken });
+    assert.equal(otherCompanyCatalogItems.response.status, 404, "Un alcance empresa no puede leer catálogos de otra empresa.");
+    const organizationCatalogItems = await apiRequest(baseUrl, `/catalogs/${organizationCatalog.body.id}/items`, { accessToken: recipientToken });
+    assert.equal(organizationCatalogItems.response.status, 404, "Un alcance empresa no puede consultar catálogos de organización.");
+    const readerScopeOptions = await apiRequest(baseUrl, "/catalogs/scope-options", { accessToken: recipientToken });
+    assert.equal(readerScopeOptions.response.status, 403, "Consultar catálogos no concede permiso para administrarlos.");
 
     const branchManagerAssignment = await apiRequest(baseUrl, "/organizations/role-assignments", {
       method: "POST", accessToken: recipientToken,
@@ -914,11 +1067,13 @@ async function verifyRoleManagement(database, createApp) {
        WHERE organization_id = $1::uuid AND action IN ('ROLE_CREATED', 'ROLE_UPDATED', 'ROLE_ASSIGNED', 'ROLE_UNASSIGNED',
          'COMPANY_CREATED', 'COMPANY_UPDATED', 'COMPANY_ACTIVATED', 'COMPANY_DEACTIVATED',
          'BRANCH_CREATED', 'BRANCH_UPDATED', 'BRANCH_ACTIVATED', 'BRANCH_DEACTIVATED',
-         'USER_MEMBERSHIP_SUSPENDED', 'USER_MEMBERSHIP_REACTIVATED')`,
+         'USER_MEMBERSHIP_SUSPENDED', 'USER_MEMBERSHIP_REACTIVATED',
+         'CATALOG_CREATED', 'CATALOG_UPDATED', 'CATALOG_ACTIVATED', 'CATALOG_DEACTIVATED',
+         'CATALOG_ITEM_CREATED', 'CATALOG_ITEM_UPDATED', 'CATALOG_ITEM_ACTIVATED', 'CATALOG_ITEM_DEACTIVATED')`,
       [organizationId],
     );
     assert.ok(auditActions.rows[0].total >= 8, "Las mutaciones de roles deben quedar auditadas.");
-    process.stdout.write("TASK-005/006 organization integration: aislamiento tenant/empresa/sucursal, unicidad, auditoría, membership status y admin final correctos.\n");
+    process.stdout.write("TASK-005/006/007 integration: aislamiento tenant/empresa/sucursal, catálogos protegidos, scope y soft-delete, auditoría, membership status y admin final correctos.\n");
   } finally {
     await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   }

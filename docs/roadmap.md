@@ -9,8 +9,8 @@ Diez módulos antes de distribución. Orden por dependencia, no por numeración 
 | TASK-003 | Auditoría y correo mínimos | 002 | En revisión técnica |
 | TASK-004 | Autenticación y alta administrativa | 003 | En revisión técnica; aceptación funcional pendiente |
 | TASK-005 | Roles y alcances | 004 | Integrada en `main`; aceptación funcional pendiente |
-| TASK-006 | Organizaciones empresas sucursales | 005 | Implementación validada localmente; revisión técnica/CI y aceptación funcional pendientes |
-| TASK-007 | Catálogos | 006 | Pendiente |
+| TASK-006 | Organizaciones empresas sucursales | 005 | Integrada en `main` por PR #19; aceptación funcional pendiente |
+| TASK-007 | Catálogos | 006 | En desarrollo; rama `task/007-catalogos` |
 | TASK-008 | Configuración | 007 | Pendiente |
 | TASK-009 | Archivos privados | 008 | Pendiente |
 | TASK-010 | Personal | 009 | Pendiente |
