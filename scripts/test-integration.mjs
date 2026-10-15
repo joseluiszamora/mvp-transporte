@@ -1,12 +1,46 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const projectName = `mvp-integration-${process.pid}`;
 const composeFile = resolve(repositoryRoot, "compose.integration.yaml");
+
+function getDockerCommand() {
+  const configuredCommand = process.env.DOCKER_CLI_PATH?.trim();
+  if (configuredCommand) {
+    return configuredCommand;
+  }
+
+  if (process.platform === "win32") {
+    const candidates = [
+      process.env.LOCALAPPDATA &&
+        join(process.env.LOCALAPPDATA, "Programs", "DockerDesktop", "resources", "bin", "docker.exe"),
+      process.env.ProgramFiles &&
+        join(process.env.ProgramFiles, "Docker", "Docker", "resources", "bin", "docker.exe"),
+    ].filter((candidate) => candidate !== undefined);
+    const installedCommand = candidates.find((candidate) => existsSync(candidate));
+    if (installedCommand) {
+      return installedCommand;
+    }
+  }
+
+  return "docker";
+}
+
+const dockerCommand = getDockerCommand();
+
+function getDockerEnvironment(overrides = {}) {
+  const environment = { ...process.env, ...overrides };
+  if (process.platform === "win32" && dockerCommand.toLowerCase().endsWith(".exe")) {
+    const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path") ?? "PATH";
+    environment[pathKey] = [dirname(dockerCommand), environment[pathKey]].filter(Boolean).join(delimiter);
+  }
+  return environment;
+}
 
 async function getAvailablePort() {
   const server = createServer();
@@ -24,11 +58,11 @@ async function getAvailablePort() {
 
 function runDockerCompose(args, hostPort) {
   const result = spawnSync(
-    "docker",
+    dockerCommand,
     ["compose", "-f", composeFile, "-p", projectName, ...args],
     {
       cwd: repositoryRoot,
-      env: { ...process.env, TEST_POSTGRES_HOST_PORT: String(hostPort) },
+      env: getDockerEnvironment({ TEST_POSTGRES_HOST_PORT: String(hostPort) }),
       stdio: "inherit",
       windowsHide: true,
     },
@@ -43,13 +77,16 @@ function runDockerCompose(args, hostPort) {
 }
 
 function requireDockerCompose() {
-  const result = spawnSync("docker", ["compose", "version"], {
+  const result = spawnSync(dockerCommand, ["compose", "version"], {
     cwd: repositoryRoot,
+    env: getDockerEnvironment(),
     stdio: "ignore",
     windowsHide: true,
   });
   if (result.error?.code === "ENOENT") {
-    throw new Error("Docker Compose no está instalado o no está disponible en PATH.");
+    throw new Error(
+      `No se encontró el ejecutable de Docker (${dockerCommand}). Abre Docker Desktop y reinicia la terminal para actualizar PATH, o define DOCKER_CLI_PATH con la ruta a docker.exe.`,
+    );
   }
   if (result.error || result.status !== 0) {
     throw new Error("No se pudo comprobar Docker Compose en este entorno.");

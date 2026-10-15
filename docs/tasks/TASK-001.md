@@ -28,7 +28,7 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm test`: correcto, 3 pruebas unitarias.
 - `npm run build`: correcto.
 - Conexión local configurada en `.env` (ignorado por Git): health 200 y readiness 200 (`SELECT 1`). No se ejecutaron migraciones ni escrituras sobre la base.
-- `npm run test:integration`: no ejecutable en este entorno porque Docker no está instalado. El script está configurado para usar una base desechable y no lee `DATABASE_URL` del entorno.
+- `npm run test:integration`: correcto con PostgreSQL desechable en Docker Compose; la comprobación PostgreSQL/API pasó y Compose eliminó el contenedor y la red temporales. El script no lee `DATABASE_URL` del entorno. En Windows localiza Docker Desktop en las rutas de instalación habituales y permite configurar `DOCKER_CLI_PATH` si la instalación está en otra ruta.
 - Revisión manual en navegador: pendiente.
 
-No marcar como aceptada: falta correr la integración en un entorno con Docker y revisar manualmente el shell. La aceptación funcional corresponde al propietario.
+No marcar como aceptada: falta revisar manualmente el shell. La aceptación funcional corresponde al propietario.
