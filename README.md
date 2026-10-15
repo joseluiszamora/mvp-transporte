@@ -14,6 +14,7 @@ Monorepo para una base administrativa reutilizable en instalaciones y bases de d
 3. Inicia PostgreSQL y Mailpit con `docker compose up -d`.
 4. En una terminal, inicia la API con `npm run dev:api`.
 5. En otra terminal, inicia la web con `npm run dev:web`.
+6. Para enviar correos locales, define `EMAIL_PAYLOAD_ENCRYPTION_KEY` y ejecuta el worker con `npm run dev:email-worker`.
 
 La API queda en `http://127.0.0.1:4000`; su health check es `/api/v1/health`, readiness es `/api/v1/ready` y OpenAPI se sirve en `/api/v1/openapi.json`. La web queda en `http://127.0.0.1:5173`. Mailpit usa `http://127.0.0.1:8025` para su bandeja y `127.0.0.1:1025` para SMTP.
 
@@ -34,7 +35,21 @@ npm run db:seed
 
 `db:seed` solo funciona con `NODE_ENV=development` o con el entorno de prueba marcado por el script de integración, y exige un host PostgreSQL local. Crea dos tenants, empresas, sucursales, usuarios de fixture pendientes de activación y los cuatro roles iniciales. No fija ni muestra contraseñas; los usuarios no pueden iniciar sesión hasta completar activación.
 
-`npm run test:integration` inicia una instancia Compose desechable en `tmpfs`, aplica las migraciones, carga los fixtures y verifica las restricciones de tenant, scope y sesión. Al finalizar elimina ese proyecto temporal sin tocar la base local persistente.
+## Correo local y worker
+
+Mailpit recibe SMTP en `127.0.0.1:1025` y muestra el buzón en `http://127.0.0.1:8025`. El worker consulta el outbox de PostgreSQL; una caída SMTP no bloquea la transacción que creó el mensaje y los reintentos usan espera exponencial limitada.
+
+Genera una clave local de 32 bytes para cifrar los datos de plantilla que esperan en el outbox:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Guárdala como `EMAIL_PAYLOAD_ENCRYPTION_KEY` en `.env` y no la compartas ni la registres. El worker requiere `DATABASE_URL`, la clave, `SMTP_HOST`, `SMTP_PORT` y `SMTP_FROM`; credenciales SMTP son opcionales y, si se configuran, se exige TLS salvo que se indique lo contrario. Las plantillas de activación, recuperación y cambio de contraseña se versionan en migraciones; la configuración administrativa de correo queda para tareas posteriores.
+
+El transporte SMTP ofrece entrega al menos una vez: si el proceso cae después de que el servidor acepte el correo pero antes de guardar ese resultado en PostgreSQL, un reintento puede duplicarlo.
+
+`npm run test:integration` inicia PostgreSQL desechable en `tmpfs` junto con Mailpit y usa puertos locales libres. Aplica las migraciones y fixtures; verifica restricciones de tenant/scope/sesión, rollback de auditoría y outbox, sanitización, deduplicación, reintento y entrega SMTP real al buzón temporal. Al finalizar elimina ese proyecto sin tocar la base local persistente.
 
 ## Validaciones
 

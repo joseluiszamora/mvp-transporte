@@ -6,7 +6,7 @@ Diez módulos antes de distribución. Orden por dependencia, no por numeración 
 |---|---|---|---|
 | TASK-001 | Fundamentos | — | Aceptada e integrada |
 | TASK-002 | Modelo de datos y políticas | 001 | En revisión |
-| TASK-003 | Auditoría y correo mínimos | 002 | Pendiente |
+| TASK-003 | Auditoría y correo mínimos | 002 | En revisión técnica |
 | TASK-004 | Autenticación y alta administrativa | 003 | Pendiente |
 | TASK-005 | Roles y alcances | 004 | Pendiente |
 | TASK-006 | Organizaciones empresas sucursales | 005 | Pendiente |

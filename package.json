@@ -15,6 +15,8 @@
   "scripts": {
     "dev:api": "npm run dev --workspace @mvp-transporte/api",
     "dev:web": "npm run dev --workspace @mvp-transporte/web",
+    "dev:email-worker": "npm run worker:email:dev --workspace @mvp-transporte/api",
+    "worker:email": "npm run build --workspace @mvp-transporte/api && npm run worker:email --workspace @mvp-transporte/api",
     "db:generate": "npm run db:generate --workspace @mvp-transporte/api",
     "db:migrate:dev": "npm run db:migrate:dev --workspace @mvp-transporte/api",
     "db:migrate:deploy": "npm run db:migrate:deploy --workspace @mvp-transporte/api",
