@@ -15,3 +15,9 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+
+  integration-mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:${TEST_MAILPIT_SMTP_HOST_PORT:-51025}:1025"
+      - "127.0.0.1:${TEST_MAILPIT_HTTP_HOST_PORT:-58025}:8025"

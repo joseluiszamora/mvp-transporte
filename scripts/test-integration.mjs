@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
@@ -59,13 +60,17 @@ async function getAvailablePort() {
   return address.port;
 }
 
-function runDockerCompose(args, hostPort) {
+function runDockerCompose(args, hostPorts) {
   const result = spawnSync(
     dockerCommand,
     ["compose", "-f", composeFile, "-p", projectName, ...args],
     {
       cwd: repositoryRoot,
-      env: getDockerEnvironment({ TEST_POSTGRES_HOST_PORT: String(hostPort) }),
+      env: getDockerEnvironment({
+        TEST_POSTGRES_HOST_PORT: String(hostPorts.postgres),
+        TEST_MAILPIT_SMTP_HOST_PORT: String(hostPorts.mailpitSmtp),
+        TEST_MAILPIT_HTTP_HOST_PORT: String(hostPorts.mailpitHttp),
+      }),
       stdio: "inherit",
       windowsHide: true,
     },
@@ -215,6 +220,288 @@ async function verifyDataModel(database) {
   );
 }
 
+async function waitForMailpit(httpPort) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${httpPort}/api/v1/info`, {
+        signal: AbortSignal.timeout(1_000),
+      });
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // Mailpit may need a few seconds after Docker reports the container as running.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("Mailpit no respondió en el tiempo esperado.");
+}
+
+async function verifyAuditAndEmail(database, smtpPort, mailpitHttpPort) {
+  const { appendAuditEvent } = await import("../apps/api/dist/modules/audit/audit-service.js");
+  const { enqueueEmail } = await import("../apps/api/dist/modules/email/outbox-service.js");
+  const { processOutboxBatch } = await import("../apps/api/dist/modules/email/outbox-worker.js");
+  const { createSmtpEmailSender } = await import("../apps/api/dist/modules/email/smtp-transport.js");
+  const encryptionKey = Buffer.alloc(32, 73).toString("base64");
+  const marker = randomUUID();
+  const rollbackRequestId = `task003-${marker}-rollback`;
+  const recipient = `task003.${marker}@example.test`;
+  const deduplicationKey = `task003:${marker}`;
+  const activationToken = `integration-secret-${randomUUID()}`;
+  const tenant = (
+    await database.query(
+      `SELECT organization.id AS organization_id, organization.name AS organization_name,
+         app_user.id AS user_id
+       FROM organizations AS organization
+       JOIN organization_memberships AS membership ON membership.organization_id = organization.id
+       JOIN users AS app_user ON app_user.id = membership.user_id
+       WHERE app_user.normalized_email = 'demo.admin.a@example.test'`,
+    )
+  ).rows[0];
+  assert.ok(tenant, "Debe existir el usuario local de fixture.");
+
+  const rollbackClient = await database.connect();
+  try {
+    await rollbackClient.query("BEGIN");
+    await rollbackClient.query("UPDATE organizations SET name = $2 WHERE id = $1::uuid", [
+      tenant.organization_id,
+      `Rollback ${marker}`,
+    ]);
+    await appendAuditEvent(rollbackClient, {
+      organizationId: tenant.organization_id,
+      actor: { type: "USER", userId: tenant.user_id },
+      action: "task003.rollback_check",
+      resourceType: "organization",
+      resourceId: tenant.organization_id,
+      requestId: rollbackRequestId,
+      before: { name: tenant.organization_name },
+      after: { name: `Rollback ${marker}` },
+    });
+    await enqueueEmail(
+      rollbackClient,
+      {
+        organizationId: tenant.organization_id,
+        templateCode: "account.activation",
+        recipient,
+        deduplicationKey,
+        payload: { displayName: "Prueba rollback", actionUrl: `https://example.test/?token=${activationToken}` },
+      },
+      encryptionKey,
+    );
+    await rollbackClient.query("ROLLBACK");
+  } catch (error) {
+    await rollbackClient.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    rollbackClient.release();
+  }
+
+  const rolledBackOrganization = await database.query(
+    "SELECT name FROM organizations WHERE id = $1::uuid",
+    [tenant.organization_id],
+  );
+  assert.equal(rolledBackOrganization.rows[0].name, tenant.organization_name, "El cambio del recurso debe revertirse.");
+  const rolledBackAudit = await database.query(
+    "SELECT count(*)::int AS count FROM audit_events WHERE request_id = $1",
+    [rollbackRequestId],
+  );
+  assert.equal(rolledBackAudit.rows[0].count, 0, "La auditoría debe compartir la transacción del recurso.");
+  const rolledBackEmail = await database.query(
+    "SELECT count(*)::int AS count FROM email_outbox WHERE deduplication_key = $1",
+    [deduplicationKey],
+  );
+  assert.equal(rolledBackEmail.rows[0].count, 0, "El correo debe compartir la transacción del recurso.");
+
+  const auditEventId = await appendAuditEvent(database, {
+    organizationId: tenant.organization_id,
+    actor: { type: "USER", userId: tenant.user_id },
+    action: "task003.sanitization_check",
+    resourceType: "user",
+    resourceId: tenant.user_id,
+    requestId: `task003-${marker}-audit`,
+    before: { displayName: "Nombre anterior", password: "audit-password-secret", filePath: "private/document.pdf" },
+    after: { displayName: "Nombre nuevo", resetToken: "audit-token-secret", status: "ACTIVE" },
+  });
+  const auditRow = await database.query("SELECT diff FROM audit_events WHERE id = $1::uuid", [auditEventId]);
+  const sanitizedDiff = auditRow.rows[0].diff;
+  const serializedDiff = JSON.stringify(sanitizedDiff);
+  assert.equal(sanitizedDiff.before.displayName, "Nombre anterior");
+  assert.equal(sanitizedDiff.after.displayName, "Nombre nuevo");
+  assert.doesNotMatch(serializedDiff, /audit-password-secret|audit-token-secret|private\/document\.pdf/u);
+  await expectPostgresCode(
+    database.query("UPDATE audit_events SET action = 'tampered' WHERE id = $1::uuid", [auditEventId]),
+    "55000",
+    "La auditoría debe rechazar modificaciones.",
+  );
+  await expectPostgresCode(
+    database.query("DELETE FROM audit_events WHERE id = $1::uuid", [auditEventId]),
+    "55000",
+    "La auditoría debe rechazar borrados.",
+  );
+  await expectPostgresCode(
+    database.query("TRUNCATE audit_events"),
+    "55000",
+    "La auditoría debe rechazar truncados.",
+  );
+
+  const emailClient = await database.connect();
+  let queuedEmail;
+  try {
+    await emailClient.query("BEGIN");
+    queuedEmail = await enqueueEmail(
+      emailClient,
+      {
+        organizationId: tenant.organization_id,
+        templateCode: "account.activation",
+        recipient,
+        deduplicationKey,
+        payload: {
+          displayName: "Prueba local",
+          actionUrl: `https://example.test/activate?token=${activationToken}`,
+        },
+      },
+      encryptionKey,
+    );
+    const duplicateEmail = await enqueueEmail(
+      emailClient,
+      {
+        organizationId: tenant.organization_id,
+        templateCode: "account.activation",
+        recipient,
+        deduplicationKey,
+        payload: { displayName: "Duplicado", actionUrl: "https://example.test/duplicate" },
+      },
+      encryptionKey,
+    );
+    assert.equal(queuedEmail.inserted, true);
+    assert.equal(duplicateEmail.inserted, false, "La misma clave de evento no debe crear otro outbox.");
+    assert.equal(duplicateEmail.id, queuedEmail.id);
+    await emailClient.query("COMMIT");
+  } catch (error) {
+    await emailClient.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    emailClient.release();
+  }
+
+  const persistedPayload = await database.query(
+    "SELECT payload::text AS payload FROM email_outbox WHERE id = $1::uuid",
+    [queuedEmail.id],
+  );
+  assert.doesNotMatch(persistedPayload.rows[0].payload, new RegExp(activationToken, "u"), "El payload privado debe cifrarse en la BD.");
+
+  const failureSender = {
+    async send() {
+      throw Object.assign(new Error(`SMTP failure contains ${activationToken}`), { code: "ECONNECTION" });
+    },
+    close() {},
+  };
+  const retryOptions = { encryptionKey, maxAttempts: 3, leaseMs: 1_000, retryBaseMs: 1_000, random: () => 0 };
+  const failedAttempt = await processOutboxBatch(database, failureSender, retryOptions);
+  assert.deepEqual(failedAttempt, { claimed: 1, sent: 0, failed: 1 });
+  await database.query("UPDATE email_outbox SET next_attempt_at = CURRENT_TIMESTAMP WHERE id = $1::uuid", [queuedEmail.id]);
+  const beforeDelivery = await database.query(
+    "SELECT last_error_code, status, attempts FROM email_outbox WHERE id = $1::uuid",
+    [queuedEmail.id],
+  );
+  assert.equal(beforeDelivery.rows[0].last_error_code, "ECONNECTION");
+  assert.equal(beforeDelivery.rows[0].status, "FAILED");
+  assert.equal(beforeDelivery.rows[0].attempts, 1);
+
+  const smtpSender = createSmtpEmailSender({
+    SMTP_HOST: "127.0.0.1",
+    SMTP_PORT: String(smtpPort),
+    SMTP_SECURE: "false",
+    SMTP_REQUIRE_TLS: "false",
+    SMTP_FROM: "MVP Transporte <no-reply@example.test>",
+  });
+  try {
+    const delivered = await processOutboxBatch(database, smtpSender, retryOptions);
+    assert.deepEqual(delivered, { claimed: 1, sent: 1, failed: 0 });
+  } finally {
+    smtpSender.close();
+  }
+
+  const completedEmail = await database.query(
+    "SELECT status, attempts, last_error_code FROM email_outbox WHERE id = $1::uuid",
+    [queuedEmail.id],
+  );
+  assert.deepEqual(completedEmail.rows[0], { status: "SENT", attempts: 2, last_error_code: null });
+  const deliveries = await database.query(
+    "SELECT attempt, outcome, error_code FROM email_deliveries WHERE outbox_id = $1::uuid ORDER BY attempt",
+    [queuedEmail.id],
+  );
+  assert.deepEqual(deliveries.rows, [
+    { attempt: 1, outcome: "FAILED", error_code: "ECONNECTION" },
+    { attempt: 2, outcome: "SENT", error_code: null },
+  ]);
+  assert.doesNotMatch(JSON.stringify(deliveries.rows), new RegExp(activationToken, "u"));
+
+  const messageListResponse = await fetch(
+    `http://127.0.0.1:${mailpitHttpPort}/api/v1/messages?start=0&limit=50`,
+  );
+  assert.equal(messageListResponse.status, 200, "Mailpit debe listar el mensaje entregado.");
+  const messageList = await messageListResponse.json();
+  assert.ok(Array.isArray(messageList.messages), "Mailpit debe devolver la lista de mensajes.");
+  const deliveredMessage = messageList.messages.find(
+    (message) => message.Subject === "Activa tu cuenta" && JSON.stringify(message.To).includes(recipient),
+  );
+  assert.ok(deliveredMessage, "El buzón local debe recibir el correo de activación.");
+  const messageTextResponse = await fetch(
+    `http://127.0.0.1:${mailpitHttpPort}/view/${encodeURIComponent(deliveredMessage.ID)}.txt`,
+  );
+  assert.equal(messageTextResponse.status, 200, "Mailpit debe permitir leer el cuerpo de texto.");
+  const messageText = await messageTextResponse.text();
+  assert.ok(messageText.includes(activationToken), "El enlace de activación debe llegar al buzón local.");
+  assert.ok(messageText.includes("Prueba local"));
+
+  const exhaustedRecipient = `task003.expired.${marker}@example.test`;
+  const exhaustedKey = `task003-expired:${marker}`;
+  const expiredEmail = await enqueueEmail(
+    database,
+    {
+      organizationId: tenant.organization_id,
+      templateCode: "account.activation",
+      recipient: exhaustedRecipient,
+      deduplicationKey: exhaustedKey,
+      payload: { displayName: "Lease agotado", actionUrl: "https://example.test/expired" },
+    },
+    encryptionKey,
+  );
+  await database.query(
+    `UPDATE email_outbox
+     SET status = 'PROCESSING', attempts = 2, locked_at = CURRENT_TIMESTAMP - INTERVAL '2 seconds',
+         lock_token = gen_random_uuid()
+     WHERE id = $1::uuid`,
+    [expiredEmail.id],
+  );
+  let shouldNotSend = 0;
+  const expiredLease = await processOutboxBatch(
+    database,
+    { async send() { shouldNotSend += 1; }, close() {} },
+    { encryptionKey, maxAttempts: 2, leaseMs: 1_000 },
+  );
+  assert.deepEqual(expiredLease, { claimed: 1, sent: 0, failed: 1 });
+  assert.equal(shouldNotSend, 0, "Un lease expirado y agotado no debe volver a enviarse.");
+  const exhaustedState = await database.query(
+    "SELECT status, attempts, last_error_code FROM email_outbox WHERE id = $1::uuid",
+    [expiredEmail.id],
+  );
+  assert.deepEqual(exhaustedState.rows[0], {
+    status: "FAILED",
+    attempts: 2,
+    last_error_code: "DELIVERY_OUTCOME_UNKNOWN",
+  });
+  const noFurtherRetry = await processOutboxBatch(
+    database,
+    { async send() { shouldNotSend += 1; }, close() {} },
+    { encryptionKey, maxAttempts: 2, leaseMs: 1_000 },
+  );
+  assert.deepEqual(noFurtherRetry, { claimed: 0, sent: 0, failed: 0 });
+  assert.equal(shouldNotSend, 0, "Un correo agotado no debe reintentarse una vez más.");
+}
+
 function requireDockerCompose() {
   const result = spawnSync(dockerCommand, ["compose", "version"], {
     cwd: repositoryRoot,
@@ -240,16 +527,23 @@ try {
   process.exit(1);
 }
 
-const hostPort = await getAvailablePort();
+const hostPorts = { postgres: await getAvailablePort() };
+do {
+  hostPorts.mailpitSmtp = await getAvailablePort();
+} while (hostPorts.mailpitSmtp === hostPorts.postgres);
+do {
+  hostPorts.mailpitHttp = await getAvailablePort();
+} while (hostPorts.mailpitHttp === hostPorts.postgres || hostPorts.mailpitHttp === hostPorts.mailpitSmtp);
 let server;
 let databasePool;
 let composeMayExist = false;
 
 try {
   composeMayExist = true;
-  runDockerCompose(["up", "--detach", "--wait", "integration-db"], hostPort);
+  runDockerCompose(["up", "--detach", "--wait", "integration-db", "integration-mailpit"], hostPorts);
+  await waitForMailpit(hostPorts.mailpitHttp);
 
-  const testDatabaseUrl = `postgresql://mvp_test:mvp_test_password@127.0.0.1:${hostPort}/mvp_integration`;
+  const testDatabaseUrl = `postgresql://mvp_test:mvp_test_password@127.0.0.1:${hostPorts.postgres}/mvp_integration`;
   const migrationEnvironment = {
     DATABASE_URL: testDatabaseUrl,
     NODE_ENV: "test",
@@ -262,6 +556,7 @@ try {
   const { createDatabasePool } = await import("../apps/api/dist/database.js");
   databasePool = createDatabasePool(testDatabaseUrl);
   await verifyDataModel(databasePool);
+  await verifyAuditAndEmail(databasePool, hostPorts.mailpitSmtp, hostPorts.mailpitHttp);
   const app = createApp({
     checkDatabase: async () => {
       await databasePool?.query("SELECT 1");
@@ -289,6 +584,6 @@ try {
   }
   await databasePool?.end();
   if (composeMayExist) {
-    runDockerCompose(["down", "--remove-orphans"], hostPort);
+    runDockerCompose(["down", "--remove-orphans"], hostPorts);
   }
 }

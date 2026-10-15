@@ -52,6 +52,16 @@ enum OutboxStatus {
   FAILED
 }
 
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
+enum EmailDeliveryOutcome {
+  SENT
+  FAILED
+}
+
 model Organization {
   id          String             @id @default(uuid()) @db.Uuid
   name        String             @db.VarChar(160)
@@ -257,6 +267,7 @@ model AuditEvent {
   companyId      String?  @map("company_id") @db.Uuid
   branchId       String?  @map("branch_id") @db.Uuid
   actorId        String?  @map("actor_id") @db.Uuid
+  actorType      AuditActorType @map("actor_type")
   action         String   @db.VarChar(100)
   resourceType   String   @map("resource_type") @db.VarChar(100)
   resourceId     String?  @map("resource_id") @db.VarChar(100)
@@ -266,7 +277,7 @@ model AuditEvent {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   company        Company? @relation("AuditEventCompany", fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
   branch         Branch? @relation("AuditEventBranch", fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
-  actor          User? @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actor          User? @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([organizationId, createdAt], map: "audit_events_organization_created_idx")
   @@index([actorId, createdAt], map: "audit_events_actor_created_idx")
@@ -283,9 +294,41 @@ model EmailOutbox {
   status           OutboxStatus @default(PENDING)
   attempts         Int         @default(0)
   nextAttemptAt    DateTime    @default(now()) @map("next_attempt_at") @db.Timestamptz(6)
+  lockedAt         DateTime?   @map("locked_at") @db.Timestamptz(6)
+  lockToken        String?     @map("lock_token") @db.Uuid
+  lastErrorCode    String?     @map("last_error_code") @db.VarChar(80)
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  template         EmailTemplate @relation(fields: [templateCode], references: [code], onDelete: Restrict)
+  deliveries       EmailDelivery[]
 
   @@index([status, nextAttemptAt], map: "email_outbox_status_next_attempt_idx")
   @@map("email_outbox")
+}
+
+model EmailTemplate {
+  code        String       @id @db.VarChar(100)
+  subject     String       @db.VarChar(200)
+  textBody    String       @map("text_body") @db.Text
+  variables   String[]     @db.Text
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  outboxItems EmailOutbox[]
+
+  @@map("email_templates")
+}
+
+model EmailDelivery {
+  id        String               @id @default(uuid()) @db.Uuid
+  outboxId  String               @map("outbox_id") @db.Uuid
+  attempt   Int
+  outcome   EmailDeliveryOutcome
+  errorCode String?              @map("error_code") @db.VarChar(80)
+  createdAt DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  outbox    EmailOutbox          @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+
+  @@unique([outboxId, attempt], map: "email_deliveries_outbox_attempt_key")
+  @@index([outboxId, createdAt], map: "email_deliveries_outbox_created_idx")
+  @@map("email_deliveries")
 }
