@@ -139,3 +139,44 @@ export interface CreatedOrganizationResponse {
   name: string;
   adminInvitationQueued: true;
 }
+
+export type OrganizationStatus = "ACTIVE" | "SUSPENDED";
+export type RecordStatus = "ACTIVE" | "INACTIVE";
+
+export interface PlatformOrganizationItem {
+  id: string;
+  name: string;
+  status: OrganizationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyItem {
+  id: string;
+  legalName: string;
+  tradeName: string | null;
+  nit: string | null;
+  contact: string | null;
+  address: string | null;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BranchItem {
+  id: string;
+  companyId: string;
+  companyName: string;
+  code: string;
+  name: string;
+  address: string | null;
+  contact: string | null;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationMembershipStatusResponse {
+  membershipId: string;
+  membershipStatus: "ACTIVE" | "SUSPENDED";
+}

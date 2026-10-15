@@ -677,6 +677,88 @@ async function verifyRoleManagement(database, createApp) {
     assert.equal(adminLogin.response.status, 200);
     const adminToken = adminLogin.body.accessToken;
 
+    const companyCreated = await apiRequest(baseUrl, "/organizations/companies", {
+      method: "POST", accessToken: adminToken,
+      body: { legalName: `TASK-006 Empresa ${marker}`, tradeName: "Sucursal Central", nit: `NIT-${marker.slice(0, 8)}`, contact: "administracion@example.test", address: "Calle 1" },
+    });
+    assert.equal(companyCreated.response.status, 201, "El tenant admin debe crear una empresa en su organización.");
+    const companyIdCreated = companyCreated.body.id;
+    const companyPage = await apiRequest(baseUrl, `/organizations/companies?limit=100&search=${encodeURIComponent(marker)}`, { accessToken: adminToken });
+    assert.equal(companyPage.response.status, 200);
+    assert.ok(companyPage.body.items.some((item) => item.id === companyIdCreated));
+    const companyUpdated = await apiRequest(baseUrl, `/organizations/companies/${companyIdCreated}`, {
+      method: "PATCH", accessToken: adminToken, body: { tradeName: "Centro actualizado", contact: null },
+    });
+    assert.equal(companyUpdated.response.status, 200);
+    assert.equal(companyUpdated.body.tradeName, "Centro actualizado");
+    assert.equal(companyUpdated.body.contact, null);
+
+    const branchCreated = await apiRequest(baseUrl, `/organizations/companies/${companyIdCreated}/branches`, {
+      method: "POST", accessToken: adminToken, body: { code: "hq", name: "Casa matriz", address: "Avenida 2" },
+    });
+    assert.equal(branchCreated.response.status, 201);
+    assert.equal(branchCreated.body.code, "HQ", "Los códigos de sucursal se normalizan para aplicar unicidad sin distinción de mayúsculas.");
+    const duplicateBranch = await apiRequest(baseUrl, `/organizations/companies/${companyIdCreated}/branches`, {
+      method: "POST", accessToken: adminToken, body: { code: "hQ", name: "Duplicada" },
+    });
+    assert.equal(duplicateBranch.response.status, 409, "Un código de sucursal no debe duplicarse dentro de la empresa.");
+    const sameCodeOtherCompany = await apiRequest(baseUrl, `/organizations/companies/${otherCompanyId}/branches`, {
+      method: "POST", accessToken: adminToken, body: { code: "hq", name: "Casa matriz de otra empresa" },
+    });
+    assert.equal(sameCodeOtherCompany.response.status, 201, "El mismo código puede utilizarse en otra empresa del tenant.");
+    const branchUpdated = await apiRequest(baseUrl, `/organizations/branches/${branchCreated.body.id}`, {
+      method: "PATCH", accessToken: adminToken, body: { code: "south", name: "Sucursal Sur" },
+    });
+    assert.equal(branchUpdated.response.status, 200);
+    assert.equal(branchUpdated.body.code, "SOUTH");
+    const branchPage = await apiRequest(baseUrl, `/organizations/branches?companyId=${companyIdCreated}&limit=100`, { accessToken: adminToken });
+    assert.equal(branchPage.response.status, 200);
+    assert.ok(branchPage.body.items.some((item) => item.id === branchCreated.body.id));
+    const deactivateBranch = await apiRequest(baseUrl, `/organizations/branches/${branchCreated.body.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(deactivateBranch.response.status, 204);
+    const reactivateBranch = await apiRequest(baseUrl, `/organizations/branches/${branchCreated.body.id}`, { method: "PATCH", accessToken: adminToken, body: { status: "ACTIVE" } });
+    assert.equal(reactivateBranch.response.status, 200);
+    const deactivateCompany = await apiRequest(baseUrl, `/organizations/companies/${companyIdCreated}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(deactivateCompany.response.status, 204);
+    const reactivateCompany = await apiRequest(baseUrl, `/organizations/companies/${companyIdCreated}`, { method: "PATCH", accessToken: adminToken, body: { status: "ACTIVE" } });
+    assert.equal(reactivateCompany.response.status, 200);
+
+    const otherOrganization = await database.query("SELECT id FROM organizations WHERE id <> $1::uuid ORDER BY name LIMIT 1", [organizationId]);
+    assert.ok(otherOrganization.rows[0], "La integración debe tener un segundo tenant para probar aislamiento.");
+    const foreignCompanyId = randomUUID();
+    const foreignBranchId = randomUUID();
+    await database.query(
+      `INSERT INTO companies (id, organization_id, legal_name, nit, status, updated_at)
+       VALUES ($1::uuid, $2::uuid, $3, $4, 'ACTIVE', CURRENT_TIMESTAMP)`,
+      [foreignCompanyId, otherOrganization.rows[0].id, `TASK-006 Empresa ajena ${marker}`, `FOREIGN-${marker.slice(0, 8)}`],
+    );
+    await database.query(
+      `INSERT INTO branches (id, organization_id, company_id, code, name, status, updated_at)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, $4, 'Sucursal ajena', 'ACTIVE', CURRENT_TIMESTAMP)`,
+      [foreignBranchId, otherOrganization.rows[0].id, foreignCompanyId, `FOREIGN-${marker.slice(0, 8)}`],
+    );
+    const foreignCompanyWrite = await apiRequest(baseUrl, `/organizations/companies/${foreignCompanyId}`, { method: "PATCH", accessToken: adminToken, body: { legalName: "Cambio ajeno" } });
+    assert.equal(foreignCompanyWrite.response.status, 404, "Un ID de otro tenant no debe permitir leer ni alterar la empresa.");
+    const foreignBranchWrite = await apiRequest(baseUrl, `/organizations/branches/${foreignBranchId}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(foreignBranchWrite.response.status, 404, "Un ID de otro tenant no debe permitir alterar la sucursal.");
+    const foreignBranchCreate = await apiRequest(baseUrl, `/organizations/companies/${foreignCompanyId}/branches`, { method: "POST", accessToken: adminToken, body: { code: "X", name: "No permitido" } });
+    assert.equal(foreignBranchCreate.response.status, 404, "No se puede crear una sucursal bajo una empresa de otro tenant.");
+    const companiesAfterForeignInsert = await apiRequest(baseUrl, `/organizations/companies?limit=100&search=${encodeURIComponent(marker)}`, { accessToken: adminToken });
+    assert.equal(companiesAfterForeignInsert.response.status, 200);
+    assert.ok(companiesAfterForeignInsert.body.items.some((item) => item.id === companyIdCreated));
+    assert.ok(!companiesAfterForeignInsert.body.items.some((item) => item.id === foreignCompanyId), "El listado del tenant no debe revelar empresas de otro tenant.");
+    const branchesAfterForeignInsert = await apiRequest(baseUrl, `/organizations/branches?limit=100&search=${encodeURIComponent(marker)}`, { accessToken: adminToken });
+    assert.equal(branchesAfterForeignInsert.response.status, 200);
+    assert.ok(!branchesAfterForeignInsert.body.items.some((item) => item.id === foreignBranchId), "El listado del tenant no debe revelar sucursales de otro tenant.");
+    const foreignRowsAfter = await database.query(
+      `SELECT company.legal_name, branch.status FROM companies AS company JOIN branches AS branch ON branch.company_id = company.id WHERE company.id = $1::uuid`,
+      [foreignCompanyId],
+    );
+    assert.equal(foreignRowsAfter.rows[0].legal_name, `TASK-006 Empresa ajena ${marker}`);
+    assert.equal(foreignRowsAfter.rows[0].status, "ACTIVE");
+    const platformListForbidden = await apiRequest(baseUrl, "/platform/organizations", { accessToken: adminToken });
+    assert.equal(platformListForbidden.response.status, 403, "Un admin de tenant no debe consultar tenants desde plataforma.");
+
     const catalog = await apiRequest(baseUrl, "/organizations/roles/permissions", { accessToken: adminToken });
     assert.equal(catalog.response.status, 200);
     assert.ok(catalog.body.some((item) => item.code === "roles.assign"));
@@ -745,6 +827,12 @@ async function verifyRoleManagement(database, createApp) {
     assert.equal(recipientMe.response.status, 200);
     assert.ok(recipientMe.body.permissions.includes("roles.assign"));
     assert.ok(recipientMe.body.permissions.includes("companies.read"));
+    const scopedCompanies = await apiRequest(baseUrl, "/organizations/companies?limit=100", { accessToken: recipientToken });
+    assert.equal(scopedCompanies.response.status, 200);
+    assert.deepEqual(scopedCompanies.body.items.map((item) => item.id), [companyId], "Una autorización de empresa solo lista esa empresa.");
+    const scopedBranches = await apiRequest(baseUrl, `/organizations/branches?companyId=${companyId}&limit=100`, { accessToken: recipientToken });
+    assert.equal(scopedBranches.response.status, 200);
+    assert.deepEqual(scopedBranches.body.items.map((item) => item.id), [branchId], "Una autorización de sucursal solo lista esa sucursal.");
 
     const branchManagerAssignment = await apiRequest(baseUrl, "/organizations/role-assignments", {
       method: "POST", accessToken: recipientToken,
@@ -807,16 +895,30 @@ async function verifyRoleManagement(database, createApp) {
     });
     assert.equal(adminRoleUpdate.response.status, 409, "No se puede modificar el rol de modo que se pierda el último administrador.");
 
-    await database.query("UPDATE organization_memberships SET status = 'SUSPENDED' WHERE id = $1::uuid", [recipientMembershipId]);
+    const suspendRecipient = await apiRequest(baseUrl, `/organizations/users/${recipientMembershipId}`, { method: "PATCH", accessToken: adminToken, body: { status: "SUSPENDED" } });
+    assert.equal(suspendRecipient.response.status, 200, "El admin debe suspender solo la membresía del tenant actual.");
     const suspendedAccess = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
     assert.equal(suspendedAccess.response.status, 401, "Una membresía suspendida pierde acceso inmediatamente.");
+    const accountAfterSuspend = await database.query("SELECT status FROM users WHERE id = $1::uuid", [recipientId]);
+    assert.equal(accountAfterSuspend.rows[0].status, "ACTIVE", "Suspender la membresía no debe cambiar el estado global de la cuenta.");
+    const recipientRestore = await apiRequest(baseUrl, `/organizations/users/${recipientMembershipId}`, { method: "PATCH", accessToken: adminToken, body: { status: "ACTIVE" } });
+    assert.equal(recipientRestore.response.status, 200);
+    const restoredAccess = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
+    assert.equal(restoredAccess.response.status, 200, "Reactivar la membresía restablece el acceso sin cambiar la cuenta global.");
+    const recipientCannotSuspend = await apiRequest(baseUrl, `/organizations/users/${adminMembershipId}`, { method: "PATCH", accessToken: recipientToken, body: { status: "SUSPENDED" } });
+    assert.equal(recipientCannotSuspend.response.status, 403, "Un usuario sin users.deactivate no puede suspender membresías.");
+    const lastAdminSuspend = await apiRequest(baseUrl, `/organizations/users/${adminMembershipId}`, { method: "PATCH", accessToken: adminToken, body: { status: "SUSPENDED" } });
+    assert.equal(lastAdminSuspend.response.status, 409, "No se puede suspender a la última membresía administradora.");
     const auditActions = await database.query(
       `SELECT count(*)::int AS total FROM audit_events
-       WHERE organization_id = $1::uuid AND action IN ('ROLE_CREATED', 'ROLE_UPDATED', 'ROLE_ASSIGNED', 'ROLE_UNASSIGNED')`,
+       WHERE organization_id = $1::uuid AND action IN ('ROLE_CREATED', 'ROLE_UPDATED', 'ROLE_ASSIGNED', 'ROLE_UNASSIGNED',
+         'COMPANY_CREATED', 'COMPANY_UPDATED', 'COMPANY_ACTIVATED', 'COMPANY_DEACTIVATED',
+         'BRANCH_CREATED', 'BRANCH_UPDATED', 'BRANCH_ACTIVATED', 'BRANCH_DEACTIVATED',
+         'USER_MEMBERSHIP_SUSPENDED', 'USER_MEMBERSHIP_REACTIVATED')`,
       [organizationId],
     );
     assert.ok(auditActions.rows[0].total >= 8, "Las mutaciones de roles deben quedar auditadas.");
-    process.stdout.write("TASK-005 role integration: catálogo, escalada, admin final, suspensión y alcances tenant/empresa/sucursal correctos.\n");
+    process.stdout.write("TASK-005/006 organization integration: aislamiento tenant/empresa/sucursal, unicidad, auditoría, membership status y admin final correctos.\n");
   } finally {
     await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   }
@@ -1105,6 +1207,30 @@ async function verifyAuthentication(database, smtpPort, mailpitHttpPort, createA
       },
     });
     assert.equal(createdOrganization.response.status, 201, "Un administrador de plataforma debe crear tenant y administrador.");
+    const platformOrganizationPage = await apiRequest(baseUrl, `/platform/organizations?search=${encodeURIComponent(createdOrganization.body.name)}`, { accessToken: platformLogin.body.accessToken });
+    assert.equal(platformOrganizationPage.response.status, 200);
+    assert.ok(platformOrganizationPage.body.items.some((item) => item.id === createdOrganization.body.id));
+    const renamedPlatformOrganization = await apiRequest(baseUrl, `/platform/organizations/${createdOrganization.body.id}`, {
+      method: "PATCH", accessToken: platformLogin.body.accessToken, body: { name: `${createdOrganization.body.name} renombrado` },
+    });
+    assert.equal(renamedPlatformOrganization.response.status, 200);
+    assert.equal(renamedPlatformOrganization.body.name, `${createdOrganization.body.name} renombrado`);
+    const suspendedPlatformOrganization = await apiRequest(baseUrl, `/platform/organizations/${createdOrganization.body.id}`, {
+      method: "PATCH", accessToken: platformLogin.body.accessToken, body: { status: "SUSPENDED" },
+    });
+    assert.equal(suspendedPlatformOrganization.response.status, 200);
+    assert.equal(suspendedPlatformOrganization.body.status, "SUSPENDED");
+    const restoredPlatformOrganization = await apiRequest(baseUrl, `/platform/organizations/${createdOrganization.body.id}`, {
+      method: "PATCH", accessToken: platformLogin.body.accessToken, body: { name: createdOrganization.body.name, status: "ACTIVE" },
+    });
+    assert.equal(restoredPlatformOrganization.response.status, 200);
+    assert.equal(restoredPlatformOrganization.body.status, "ACTIVE");
+    const platformOrganizationAudit = await database.query(
+      `SELECT count(*)::int AS total FROM audit_events
+       WHERE actor_id = $1::uuid AND resource_id = $2 AND action IN ('ORGANIZATION_UPDATED', 'ORGANIZATION_ACTIVATED', 'ORGANIZATION_DEACTIVATED')`,
+      [platformLogin.body.user.id, createdOrganization.body.id],
+    );
+    assert.ok(platformOrganizationAudit.rows[0].total >= 3, "Actualizar, suspender y reactivar un tenant debe quedar auditado.");
     const tenantAdmin = await database.query(
       `SELECT membership.id AS membership_id, role.id AS role_id
        FROM organization_memberships AS membership
