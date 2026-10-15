@@ -5,6 +5,7 @@ import { appendAuditEvent } from "../audit/audit-service.ts";
 import { enqueueEmail } from "../email/outbox-service.ts";
 import { hashOpaqueToken, createOpaqueToken } from "../auth/auth-crypto.ts";
 import { AuthServiceError, requireEmailAddress, type AuthSettings, type AuthenticatedSession } from "../auth/auth-service.ts";
+import { tenantAdminPermissionCodes } from "../access/permission-catalog.ts";
 
 interface UserMembershipRow extends QueryResultRow {
   id: string;
@@ -193,5 +194,90 @@ export async function inviteOrganizationUser(
       requestId: input.requestId,
       after: { status: "INVITED" },
     });
+  });
+}
+
+export async function updateOrganizationMembershipStatus(
+  database: Pool,
+  session: AuthenticatedSession,
+  input: { membershipId: string; status: "ACTIVE" | "SUSPENDED"; requestId: string },
+): Promise<{ membershipId: string; membershipStatus: "ACTIVE" | "SUSPENDED" }> {
+  const organizationId = session.organizationId;
+  if (!organizationId) {
+    throw new AuthServiceError(403, "ORGANIZATION_REQUIRED", "Selecciona una organización activa.");
+  }
+
+  return transaction(database, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`mvp-transporte:role-management:${organizationId}`]);
+    const actor = await resolveAccessContext(client, session.userId, organizationId);
+    const permission = input.status === "SUSPENDED" ? "users.deactivate" : "users.update";
+    if (!actor || !hasPermission(actor, permission, { organizationId })) {
+      throw new AuthServiceError(403, "FORBIDDEN", "No tienes permiso para realizar esta acción.");
+    }
+    const result = await client.query<{
+      id: string;
+      status: "INVITED" | "ACTIVE" | "SUSPENDED";
+      user_id: string;
+      user_status: "PENDING_ACTIVATION" | "ACTIVE" | "BLOCKED";
+    }>(
+      `SELECT membership.id, membership.status, membership.user_id, app_user.status AS user_status
+       FROM organization_memberships AS membership
+       JOIN users AS app_user ON app_user.id = membership.user_id
+       WHERE membership.id = $1::uuid AND membership.organization_id = $2::uuid
+       FOR UPDATE OF membership`,
+      [input.membershipId, organizationId],
+    );
+    const membership = result.rows[0];
+    if (!membership) {
+      throw new AuthServiceError(404, "MEMBERSHIP_NOT_FOUND", "Membresía no disponible.");
+    }
+    if (membership.status === "INVITED") {
+      throw new AuthServiceError(409, "INVITATION_NOT_ACTIVE", "La invitación debe aceptarse antes de cambiar su estado.");
+    }
+    if (input.status === "ACTIVE" && membership.user_status !== "ACTIVE") {
+      throw new AuthServiceError(409, "ACCOUNT_NOT_ACTIVE", "La cuenta debe estar activa para reactivar la membresía.");
+    }
+    if (membership.status !== input.status) {
+      await client.query(
+        `UPDATE organization_memberships SET status = $3::"MembershipStatus", updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1::uuid AND organization_id = $2::uuid`,
+        [membership.id, organizationId, input.status],
+      );
+      if (input.status === "SUSPENDED") {
+        const remainingAdmins = await client.query<{ total: number }>(
+          `SELECT count(DISTINCT candidate.id)::int AS total
+           FROM organization_memberships AS candidate
+           JOIN users AS app_user ON app_user.id = candidate.user_id
+           JOIN role_assignments AS assignment ON assignment.membership_id = candidate.id AND assignment.organization_id = candidate.organization_id
+           JOIN roles AS role ON role.id = assignment.role_id AND role.organization_id = assignment.organization_id
+           WHERE candidate.organization_id = $1::uuid AND candidate.status = 'ACTIVE'
+             AND app_user.status = 'ACTIVE' AND role.status = 'ACTIVE'
+             AND assignment.scope_type = 'ORGANIZATION' AND assignment.company_id IS NULL AND assignment.branch_id IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM unnest($2::text[]) AS required(permission_code)
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM role_permissions AS role_permission
+                 WHERE role_permission.role_id = role.id AND role_permission.organization_id = role.organization_id
+                   AND role_permission.permission_code = required.permission_code
+               )
+             )`,
+          [organizationId, tenantAdminPermissionCodes],
+        );
+        if ((remainingAdmins.rows[0]?.total ?? 0) === 0) {
+          throw new AuthServiceError(409, "LAST_ADMIN_REQUIRED", "La organización debe conservar al menos un administrador activo.");
+        }
+      }
+      await appendAuditEvent(client, {
+        actor: { type: "USER", userId: session.userId },
+        organizationId,
+        action: input.status === "SUSPENDED" ? "USER_MEMBERSHIP_SUSPENDED" : "USER_MEMBERSHIP_REACTIVATED",
+        resourceType: "OrganizationMembership",
+        resourceId: membership.id,
+        requestId: input.requestId,
+        before: { status: membership.status },
+        after: { status: input.status },
+      });
+    }
+    return { membershipId: membership.id, membershipStatus: input.status };
   });
 }

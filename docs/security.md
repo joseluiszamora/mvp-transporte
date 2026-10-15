@@ -29,3 +29,10 @@ Tokens activación y recuperación: aleatorios fuertes, hash almacenado, un solo
 - Invitar a una identidad existente crea solo una membresía invitada; su aceptación requiere el enlace enviado y no cambia nombre ni contraseña global. La recuperación entrega la misma respuesta HTTP para correos conocidos y desconocidos. El primer administrador se crea con `npm run bootstrap:platform-admin` y activa su propia contraseña por correo.
 
 La integración desechable cubre concurrencia, refresh/replay, aislamiento entre tenants, permisos, invitaciones/activación, anti-enumeración, recuperación, revocación y entrega a Mailpit. La navegación visual y la coordinación con varias pestañas quedan pendientes de prueba manual del propietario; no son aceptación funcional automática.
+
+## Implementación de TASK-006
+
+- Las rutas de empresas y sucursales toman el tenant de la membresía seleccionada en la sesión. Cada ID se vuelve a cargar dentro de ese tenant antes de autorizar; los listados filtran cada fila por su permiso y alcance antes de calcular el total y paginar.
+- Crear empresa exige permiso a nivel de organización; crear sucursal exige permiso en la empresa activa. Editar y desactivar cargan primero el recurso y autorizan contra empresa/sucursal propia. Los tenants suspendidos no aceptan escrituras; una empresa inactiva bloquea mutaciones de sus sucursales.
+- Suspender/reactivar ADM-02 altera solo `OrganizationMembership`, se serializa con las mutaciones de roles del tenant y se audita. No escribe `User.status`; se rechaza la suspensión si deja al tenant sin una membresía administradora activa.
+- La activación de tenants requiere rol de plataforma. Suspender un tenant bloquea el acceso de sus membresías en la siguiente solicitud; activarlo de nuevo usa `organizations.activate`. Los cambios de estado y datos se auditan.

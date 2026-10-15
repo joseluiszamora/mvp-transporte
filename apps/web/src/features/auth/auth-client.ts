@@ -1,9 +1,14 @@
 import type {
   AccountTokenInspectionResponse,
   AuthCredentialsResponse,
+  BranchItem,
+  CompanyItem,
   CreatedOrganizationResponse,
   CurrentUserResponse,
+  OrganizationMembershipStatusResponse,
+  OrganizationStatus,
   OrganizationUserItem,
+  PlatformOrganizationItem,
   OrganizationRoleItem,
   OrganizationRoleMutationResult,
   PermissionCatalogItem,
@@ -13,6 +18,7 @@ import type {
   RoleAssignmentOption,
   RoleScopeType,
   RoleStatus,
+  RecordStatus,
   SelectOrganizationResponse,
 } from "@mvp-transporte/contracts";
 
@@ -290,6 +296,62 @@ export async function inviteUser(email: string, displayName: string): Promise<vo
     method: "POST",
     body: JSON.stringify({ email, displayName }),
   });
+}
+
+export async function updateMembershipStatus(membershipId: string, status: "ACTIVE" | "SUSPENDED"): Promise<OrganizationMembershipStatusResponse> {
+  return apiRequest<OrganizationMembershipStatusResponse>(`/organizations/users/${encodeURIComponent(membershipId)}`, {
+    method: "PATCH", body: JSON.stringify({ status }),
+  });
+}
+
+export async function listPlatformOrganizations(input: { limit?: number; offset?: number; search?: string; status?: OrganizationStatus } = {}): Promise<PageResponse<PlatformOrganizationItem>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  if (input.status) query.set("status", input.status);
+  return apiRequest<PageResponse<PlatformOrganizationItem>>(`/platform/organizations?${query.toString()}`);
+}
+
+export async function updatePlatformOrganization(organizationId: string, input: { name?: string; status?: OrganizationStatus }): Promise<PlatformOrganizationItem> {
+  return apiRequest<PlatformOrganizationItem>(`/platform/organizations/${encodeURIComponent(organizationId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function listTenantCompanies(input: { limit?: number; offset?: number; search?: string; status?: RecordStatus } = {}): Promise<PageResponse<CompanyItem>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  if (input.status) query.set("status", input.status);
+  return apiRequest<PageResponse<CompanyItem>>(`/organizations/companies?${query.toString()}`);
+}
+
+export async function createTenantCompany(input: { legalName: string; tradeName?: string | null; nit?: string | null; contact?: string | null; address?: string | null }): Promise<CompanyItem> {
+  return apiRequest<CompanyItem>("/organizations/companies", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateTenantCompany(companyId: string, input: { legalName?: string; tradeName?: string | null; nit?: string | null; contact?: string | null; address?: string | null; status?: RecordStatus }): Promise<CompanyItem> {
+  return apiRequest<CompanyItem>(`/organizations/companies/${encodeURIComponent(companyId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function deactivateTenantCompany(companyId: string): Promise<void> {
+  await apiRequest<void>(`/organizations/companies/${encodeURIComponent(companyId)}`, { method: "DELETE" });
+}
+
+export async function listTenantBranches(input: { companyId?: string; limit?: number; offset?: number; search?: string; status?: RecordStatus } = {}): Promise<PageResponse<BranchItem>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.companyId) query.set("companyId", input.companyId);
+  if (input.search) query.set("search", input.search);
+  if (input.status) query.set("status", input.status);
+  return apiRequest<PageResponse<BranchItem>>(`/organizations/branches?${query.toString()}`);
+}
+
+export async function createTenantBranch(companyId: string, input: { code: string; name: string; address?: string | null; contact?: string | null }): Promise<BranchItem> {
+  return apiRequest<BranchItem>(`/organizations/companies/${encodeURIComponent(companyId)}/branches`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateTenantBranch(branchId: string, input: { code?: string; name?: string; address?: string | null; contact?: string | null; status?: RecordStatus }): Promise<BranchItem> {
+  return apiRequest<BranchItem>(`/organizations/branches/${encodeURIComponent(branchId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function deactivateTenantBranch(branchId: string): Promise<void> {
+  await apiRequest<void>(`/organizations/branches/${encodeURIComponent(branchId)}`, { method: "DELETE" });
 }
 
 export async function listRolePermissionCatalog(): Promise<PermissionCatalogItem[]> {

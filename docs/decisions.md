@@ -52,3 +52,10 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 - 15/10/2026: los roles de tenant nunca pueden incluir `organizations.*`; los permisos provienen del catálogo inmutable. Crear/editar roles requiere alcance de organización y limita la nueva lista de permisos al conjunto efectivo del actor. Las asignaciones admiten los tres scopes existentes y validan el actor contra cada permiso del rol en el destino cargado desde PostgreSQL.
 - 15/10/2026: se define “último administrador” como una membresía y usuario activos con un rol activo asignado a nivel `ORGANIZATION` que contiene todos los permisos de cliente. Mutaciones de roles se serializan con un advisory lock transaccional por tenant y verifican que quede un administrador antes de confirmar; las mismas transacciones guardan auditoría.
 - 15/10/2026: el acceso vuelve a resolver membresía, estado de rol y permisos desde PostgreSQL por solicitud, de modo que desactivar una membresía/rol o cambiar una asignación no depende de esperar el vencimiento del JWT.
+
+## Implementación de TASK-006
+
+- 15/10/2026: los códigos de sucursal se recortan y pasan a mayúsculas; la comparación de duplicados es insensible a mayúsculas y limitada a la empresa. La serialización de escrituras por la fila de empresa y la normalización preservan la unicidad sin migración. El mismo código puede existir en empresas diferentes.
+- 15/10/2026: empresas y sucursales conservan filas históricas al desactivarse. `companies.update`/`branches.update` autorizan reactivación, mientras `companies.deactivate`/`branches.deactivate` autorizan desactivación; una empresa inactiva impide escribir en sus sucursales.
+- 15/10/2026: ADM-02 permite suspender solo membresías aceptadas; las invitaciones se controlan con su enlace de un solo uso. Suspender/reactivar nunca cambia el User global y usa el mismo advisory lock de gestión de roles para proteger la regla del último administrador.
+- 15/10/2026: no se añade migración; TASK-002 ya representa organización, empresa, sucursal, estados, unicidad y claves foráneas compuestas. La integración aplica solo esas migraciones existentes a una base desechable.

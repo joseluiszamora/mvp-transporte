@@ -2,7 +2,16 @@ import { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
 import type { Pool } from "pg";
 import { createOrganizationWithAdmin } from "../organizations/platform-service.ts";
-import { inviteOrganizationUser, listOrganizationUsers } from "../users/tenant-users-service.ts";
+import { listPlatformOrganizations, updatePlatformOrganization } from "../organizations/organization-management-service.ts";
+import {
+  createTenantBranch,
+  createTenantCompany,
+  listTenantBranches,
+  listTenantCompanies,
+  updateTenantBranch,
+  updateTenantCompany,
+} from "../organizations/tenant-organization-service.ts";
+import { inviteOrganizationUser, listOrganizationUsers, updateOrganizationMembershipStatus } from "../users/tenant-users-service.ts";
 import { consumeRateLimit } from "./rate-limit.ts";
 import {
   AuthServiceError,
@@ -65,6 +74,33 @@ function bodyText(request: Request, key: string, maximumLength = 4_000, optional
   if (typeof value !== "string" || value.length === 0 || value.length > maximumLength) {
     throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
   }
+  return value;
+}
+
+function bodyOptionalText(request: Request, key: string, maximumLength: number): string | null | undefined {
+  const value = bodyRecord(request)[key];
+  if (value === undefined || value === null) return value;
+  if (typeof value !== "string" || value.length > maximumLength) {
+    throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+  }
+  return value;
+}
+
+function parseRecordStatus(value: unknown): "ACTIVE" | "INACTIVE" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "ACTIVE" || value === "INACTIVE") return value;
+  throw new AuthServiceError(400, "INVALID_REQUEST", "El estado no es válido.");
+}
+
+function parseOrganizationStatus(value: unknown): "ACTIVE" | "SUSPENDED" | undefined {
+  if (value === undefined) return undefined;
+  if (value === "ACTIVE" || value === "SUSPENDED") return value;
+  throw new AuthServiceError(400, "INVALID_REQUEST", "El estado no es válido.");
+}
+
+function querySearch(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new AuthServiceError(400, "INVALID_REQUEST", "La búsqueda no es válida.");
   return value;
 }
 
@@ -348,6 +384,125 @@ export function createAuthRouter(
     response.status(202).json(invitationResponse);
   }));
 
+  router.patch("/organizations/users/:membershipId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.membershipId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    const status = bodyRecord(request).status;
+    if (status !== "ACTIVE" && status !== "SUSPENDED") throw new AuthServiceError(400, "INVALID_REQUEST", "El estado no es válido.");
+    response.status(200).json(await updateOrganizationMembershipStatus(database, session, {
+      membershipId: request.params.membershipId,
+      status,
+      requestId: getRequestId(response),
+    }));
+  }));
+
+  router.get("/organizations/companies", authenticate, asyncRoute(async (request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    response.status(200).json(await listTenantCompanies(database, session, {
+      limit: queryInteger(request.query.limit, 20, 1, 100),
+      offset: queryInteger(request.query.offset, 0, 0, 1_000_000),
+      search: querySearch(request.query.search),
+      status: parseRecordStatus(request.query.status),
+    }));
+  }));
+
+  router.post("/organizations/companies", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    response.status(201).json(await createTenantCompany(database, session, {
+      legalName: bodyText(request, "legalName", 200) as string,
+      tradeName: bodyOptionalText(request, "tradeName", 200),
+      nit: bodyOptionalText(request, "nit", 40),
+      contact: bodyOptionalText(request, "contact", 300),
+      address: bodyOptionalText(request, "address", 500),
+      requestId: getRequestId(response),
+    }));
+  }));
+
+  router.patch("/organizations/companies/:companyId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.companyId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    response.status(200).json(await updateTenantCompany(database, session, {
+      companyId: request.params.companyId,
+      legalName: bodyText(request, "legalName", 200, true),
+      tradeName: bodyOptionalText(request, "tradeName", 200),
+      nit: bodyOptionalText(request, "nit", 40),
+      contact: bodyOptionalText(request, "contact", 300),
+      address: bodyOptionalText(request, "address", 500),
+      status: parseRecordStatus(bodyRecord(request).status),
+      requestId: getRequestId(response),
+    }));
+  }));
+
+  router.delete("/organizations/companies/:companyId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.companyId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    await updateTenantCompany(database, session, { companyId: request.params.companyId, status: "INACTIVE", requestId: getRequestId(response) });
+    response.status(204).end();
+  }));
+
+  router.get("/organizations/branches", authenticate, asyncRoute(async (request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    const companyId = request.query.companyId;
+    if (companyId !== undefined && (typeof companyId !== "string" || !isUuid(companyId))) throw new AuthServiceError(400, "INVALID_REQUEST", "La empresa no es válida.");
+    response.status(200).json(await listTenantBranches(database, session, {
+      limit: queryInteger(request.query.limit, 20, 1, 100),
+      offset: queryInteger(request.query.offset, 0, 0, 1_000_000),
+      companyId: typeof companyId === "string" ? companyId : undefined,
+      search: querySearch(request.query.search),
+      status: parseRecordStatus(request.query.status),
+    }));
+  }));
+
+  router.post("/organizations/companies/:companyId/branches", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.companyId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La empresa no es válida.");
+    response.status(201).json(await createTenantBranch(database, session, {
+      companyId: request.params.companyId,
+      code: bodyText(request, "code", 40) as string,
+      name: bodyText(request, "name", 160) as string,
+      address: bodyOptionalText(request, "address", 500),
+      contact: bodyOptionalText(request, "contact", 300),
+      requestId: getRequestId(response),
+    }));
+  }));
+
+  router.patch("/organizations/branches/:branchId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.branchId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La sucursal no es válida.");
+    response.status(200).json(await updateTenantBranch(database, session, {
+      branchId: request.params.branchId,
+      code: bodyText(request, "code", 40, true),
+      name: bodyText(request, "name", 160, true),
+      address: bodyOptionalText(request, "address", 500),
+      contact: bodyOptionalText(request, "contact", 300),
+      status: parseRecordStatus(bodyRecord(request).status),
+      requestId: getRequestId(response),
+    }));
+  }));
+
+  router.delete("/organizations/branches/:branchId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.branchId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La sucursal no es válida.");
+    await updateTenantBranch(database, session, { branchId: request.params.branchId, status: "INACTIVE", requestId: getRequestId(response) });
+    response.status(204).end();
+  }));
+
   router.get("/organizations/roles/permissions", authenticate, asyncRoute(async (_request, response) => {
     const session = getAuthenticatedSession(response);
     if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
@@ -447,6 +602,17 @@ export function createAuthRouter(
     response.status(204).end();
   }));
 
+  router.get("/platform/organizations", authenticate, asyncRoute(async (request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    response.status(200).json(await listPlatformOrganizations(database, session, {
+      limit: queryInteger(request.query.limit, 20, 1, 100),
+      offset: queryInteger(request.query.offset, 0, 0, 1_000_000),
+      search: querySearch(request.query.search),
+      status: parseOrganizationStatus(request.query.status),
+    }));
+  }));
+
   router.post("/platform/organizations", authenticate, asyncRoute(async (request, response) => {
     requireAllowedOrigin(request, origins, false);
     const session = getAuthenticatedSession(response);
@@ -460,6 +626,19 @@ export function createAuthRouter(
       requestId: getRequestId(response),
     });
     response.status(201).json(organization);
+  }));
+
+  router.patch("/platform/organizations/:organizationId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.organizationId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La organización no es válida.");
+    response.status(200).json(await updatePlatformOrganization(database, session, {
+      organizationId: request.params.organizationId,
+      name: bodyText(request, "name", 160, true),
+      status: parseOrganizationStatus(bodyRecord(request).status),
+      requestId: getRequestId(response),
+    }));
   }));
 
   return router;
