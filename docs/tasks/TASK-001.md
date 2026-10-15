@@ -27,6 +27,7 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run typecheck`: correcto.
 - `npm test`: correcto, 3 pruebas unitarias.
 - `npm run build`: correcto.
+- Conexión local configurada en `.env` (ignorado por Git): health 200 y readiness 200 (`SELECT 1`). No se ejecutaron migraciones ni escrituras sobre la base.
 - `npm run test:integration`: no ejecutable en este entorno porque Docker no está instalado. El script está configurado para usar una base desechable y no lee `DATABASE_URL` del entorno.
 - Revisión manual en navegador: pendiente.
 
