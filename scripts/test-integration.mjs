@@ -585,7 +585,245 @@ async function deliverQueuedAuthMessages(database, smtpPort, encryptionKey) {
   }
 }
 
+async function verifyRoleManagement(database, createApp) {
+  const marker = randomUUID();
+  const organizationResult = await database.query(
+    "SELECT id FROM organizations WHERE name = 'Tenant de desarrollo A'",
+  );
+  const companyResult = await database.query(
+    "SELECT id FROM companies WHERE organization_id = $1::uuid ORDER BY id LIMIT 1",
+    [organizationResult.rows[0].id],
+  );
+  const branchResult = await database.query(
+    "SELECT id FROM branches WHERE company_id = $1::uuid ORDER BY id LIMIT 1",
+    [companyResult.rows[0].id],
+  );
+  assert.ok(organizationResult.rows[0] && companyResult.rows[0] && branchResult.rows[0]);
+  const organizationId = organizationResult.rows[0].id;
+  const companyId = companyResult.rows[0].id;
+  const branchId = branchResult.rows[0].id;
+  const otherCompanyId = randomUUID();
+  const otherBranchId = randomUUID();
+  await database.query(
+    `INSERT INTO companies (id, organization_id, legal_name, nit, status, updated_at)
+     VALUES ($1::uuid, $2::uuid, $3, $4, 'ACTIVE', CURRENT_TIMESTAMP)`,
+    [otherCompanyId, organizationId, `Otra empresa ${marker}`, `TEST-${marker.slice(0, 8)}`],
+  );
+  await database.query(
+    `INSERT INTO branches (id, organization_id, company_id, code, name, status, updated_at)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4, 'Sucursal de prueba', 'ACTIVE', CURRENT_TIMESTAMP)`,
+    [otherBranchId, organizationId, companyId, `OTHER-${marker.slice(0, 8)}`],
+  );
+
+  const adminId = randomUUID();
+  const adminMembershipId = randomUUID();
+  const recipientId = randomUUID();
+  const recipientMembershipId = randomUUID();
+  const adminEmail = `task005.admin.${marker}@example.test`;
+  const recipientEmail = `task005.recipient.${marker}@example.test`;
+  const password = "Task 005 Integration Password 2026!";
+  const { hashPassword } = await import("../apps/api/dist/modules/auth/auth-crypto.js");
+  const passwordHash = await hashPassword(password);
+  for (const [id, email, name] of [
+    [adminId, adminEmail, "Administración de roles de prueba"],
+    [recipientId, recipientEmail, "Membresía de prueba"],
+  ]) {
+    await database.query(
+      `INSERT INTO users (id, normalized_email, display_name, password_hash, status, updated_at)
+       VALUES ($1::uuid, $2, $3, $4, 'ACTIVE', CURRENT_TIMESTAMP)`,
+      [id, email, name, passwordHash],
+    );
+  }
+  await database.query(
+    `INSERT INTO organization_memberships (id, organization_id, user_id, status, updated_at)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, 'ACTIVE', CURRENT_TIMESTAMP),
+            ($4::uuid, $2::uuid, $5::uuid, 'ACTIVE', CURRENT_TIMESTAMP)`,
+    [adminMembershipId, organizationId, adminId, recipientMembershipId, recipientId],
+  );
+  const adminRoleResult = await database.query(
+    "SELECT id FROM roles WHERE organization_id = $1::uuid AND code = 'admin'",
+    [organizationId],
+  );
+  assert.ok(adminRoleResult.rows[0]);
+  const adminAssignmentId = randomUUID();
+  await database.query(
+    `INSERT INTO role_assignments (id, organization_id, membership_id, role_id, scope_type)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'ORGANIZATION')`,
+    [adminAssignmentId, organizationId, adminMembershipId, adminRoleResult.rows[0].id],
+  );
+
+  const settings = {
+    accessTokenSecret: Buffer.alloc(32, 57).toString("base64"),
+    emailPayloadEncryptionKey: Buffer.alloc(32, 61).toString("base64"),
+    publicWebUrl: "http://127.0.0.1:5173",
+    secureCookies: false,
+  };
+  const app = createApp({
+    database,
+    allowedOrigins: ["http://127.0.0.1:5173"],
+    authSettings: settings,
+    checkDatabase: async () => { await database.query("SELECT 1"); },
+  });
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise((resolveListen, reject) => {
+    server.once("error", reject);
+    server.once("listening", resolveListen);
+  });
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const adminLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: adminEmail, password } });
+    assert.equal(adminLogin.response.status, 200);
+    const adminToken = adminLogin.body.accessToken;
+
+    const catalog = await apiRequest(baseUrl, "/organizations/roles/permissions", { accessToken: adminToken });
+    assert.equal(catalog.response.status, 200);
+    assert.ok(catalog.body.some((item) => item.code === "roles.assign"));
+    assert.ok(catalog.body.every((item) => !item.code.startsWith("organizations.")));
+    const rolesPage = await apiRequest(baseUrl, "/organizations/roles?limit=2&offset=0", { accessToken: adminToken });
+    assert.equal(rolesPage.response.status, 200);
+    assert.equal(rolesPage.body.limit, 2);
+    const membershipsPage = await apiRequest(baseUrl, "/organizations/role-assignment-options?kind=memberships&limit=2", { accessToken: adminToken });
+    assert.equal(membershipsPage.response.status, 200);
+    assert.equal(membershipsPage.body.limit, 2);
+
+    async function createRole(name, permissionCodes) {
+      const result = await apiRequest(baseUrl, "/organizations/roles", {
+        method: "POST", accessToken: adminToken, body: { name, permissionCodes },
+      });
+      assert.equal(result.response.status, 201, `El rol '${name}' debe crearse.`);
+      return result.body;
+    }
+    const organizationReader = await createRole(`Lectura de tenant ${marker}`, ["catalogs.read"]);
+    const companyReader = await createRole(`Lectura de empresa ${marker}`, ["companies.read"]);
+    const branchReader = await createRole(`Lectura de sucursal ${marker}`, ["branches.read"]);
+    const branchManager = await createRole(`Gestión de sucursal ${marker}`, ["roles.assign"]);
+    const usersReader = await createRole(`Lectura de usuarios ${marker}`, ["users.read"]);
+    const invalidPlatformRole = await apiRequest(baseUrl, "/organizations/roles", {
+      method: "POST", accessToken: adminToken, body: { name: "Sin permisos de plataforma", permissionCodes: ["organizations.create"] },
+    });
+    assert.equal(invalidPlatformRole.response.status, 400, "Los roles de tenant no pueden incluir permisos de plataforma.");
+
+    async function assign(input) {
+      return apiRequest(baseUrl, "/organizations/role-assignments", { method: "POST", accessToken: adminToken, body: input });
+    }
+    const organizationAssignment = await assign({ membershipId: recipientMembershipId, roleId: organizationReader.id, scopeType: "ORGANIZATION" });
+    assert.equal(organizationAssignment.response.status, 201);
+    const companyAssignment = await assign({ membershipId: recipientMembershipId, roleId: companyReader.id, scopeType: "COMPANY", companyId });
+    assert.equal(companyAssignment.response.status, 201);
+    const branchAssignment = await assign({ membershipId: recipientMembershipId, roleId: branchReader.id, scopeType: "BRANCH", companyId, branchId });
+    assert.equal(branchAssignment.response.status, 201);
+    const managerAssignment = await assign({ membershipId: recipientMembershipId, roleId: branchManager.id, scopeType: "BRANCH", companyId, branchId });
+    assert.equal(managerAssignment.response.status, 201);
+    const otherTenantMembership = await database.query(
+      `SELECT membership.id, membership.organization_id FROM organization_memberships AS membership
+       JOIN organizations AS organization ON organization.id = membership.organization_id
+       WHERE organization.name = 'Tenant de desarrollo B' LIMIT 1`,
+    );
+    assert.ok(otherTenantMembership.rows[0]);
+    const crossTenantAssignment = await assign({
+      membershipId: otherTenantMembership.rows[0].id, roleId: companyReader.id, scopeType: "COMPANY", companyId,
+    });
+    assert.equal(crossTenantAssignment.response.status, 404, "Una membresía de otro tenant debe ser inaccesible.");
+
+    const { hasPermission, resolveAccessContext } = await import("../apps/api/dist/modules/access/access-context.js");
+    const recipientContext = await resolveAccessContext(database, recipientId, organizationId);
+    assert.ok(recipientContext);
+    assert.equal(hasPermission(recipientContext, "catalogs.read", { organizationId }), true);
+    assert.equal(hasPermission(recipientContext, "catalogs.read", { organizationId: otherTenantMembership.rows[0].organization_id }), false);
+    assert.equal(hasPermission(recipientContext, "companies.read", { organizationId, companyId }), true);
+    assert.equal(hasPermission(recipientContext, "companies.read", { organizationId, companyId: otherCompanyId }), false);
+    assert.equal(hasPermission(recipientContext, "branches.read", { organizationId, companyId, branchId }), true);
+    assert.equal(hasPermission(recipientContext, "branches.read", { organizationId, companyId, branchId: otherBranchId }), false);
+    assert.equal(hasPermission(recipientContext, "branches.read", { organizationId, companyId }), false, "Un permiso de sucursal no debe ampliar al resto de la empresa.");
+
+    const recipientLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: recipientEmail, password } });
+    assert.equal(recipientLogin.response.status, 200);
+    const recipientToken = recipientLogin.body.accessToken;
+    const recipientMe = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
+    assert.equal(recipientMe.response.status, 200);
+    assert.ok(recipientMe.body.permissions.includes("roles.assign"));
+    assert.ok(recipientMe.body.permissions.includes("companies.read"));
+
+    const branchManagerAssignment = await apiRequest(baseUrl, "/organizations/role-assignments", {
+      method: "POST", accessToken: recipientToken,
+      body: { membershipId: adminMembershipId, roleId: branchReader.id, scopeType: "BRANCH", companyId, branchId },
+    });
+    assert.equal(branchManagerAssignment.response.status, 201, "El permiso roles.assign de sucursal permite operar en esa sucursal.");
+    const duplicateAssignment = await apiRequest(baseUrl, "/organizations/role-assignments", {
+      method: "POST", accessToken: recipientToken,
+      body: { membershipId: adminMembershipId, roleId: branchReader.id, scopeType: "BRANCH", companyId, branchId },
+    });
+    assert.equal(duplicateAssignment.response.status, 409, "No deben duplicarse asignaciones del mismo rol y alcance.");
+    const deniedOtherBranch = await apiRequest(baseUrl, "/organizations/role-assignments", {
+      method: "POST", accessToken: recipientToken,
+      body: { membershipId: adminMembershipId, roleId: branchReader.id, scopeType: "BRANCH", companyId, branchId: otherBranchId },
+    });
+    assert.equal(deniedOtherBranch.response.status, 403, "Un permiso de asignación de sucursal no autoriza otra sucursal de la empresa.");
+    const deniedOtherCompany = await apiRequest(baseUrl, "/organizations/role-assignments", {
+      method: "POST", accessToken: recipientToken,
+      body: { membershipId: adminMembershipId, roleId: companyReader.id, scopeType: "COMPANY", companyId: otherCompanyId },
+    });
+    assert.equal(deniedOtherCompany.response.status, 403, "Un permiso de asignación de sucursal no autoriza otra empresa.");
+    const deniedEscalation = await apiRequest(baseUrl, "/organizations/role-assignments", {
+      method: "POST", accessToken: recipientToken,
+      body: { membershipId: adminMembershipId, roleId: usersReader.id, scopeType: "BRANCH", companyId, branchId },
+    });
+    assert.equal(deniedEscalation.response.status, 403, "El actor no puede conceder un permiso que no posee.");
+    const deniedRoleEdit = await apiRequest(baseUrl, `/organizations/roles/${companyReader.id}`, {
+      method: "PATCH", accessToken: recipientToken, body: { name: "Escalada" },
+    });
+    assert.equal(deniedRoleEdit.response.status, 403, "Un asignador no puede editar el catálogo global del tenant.");
+    const deniedRoleCreate = await apiRequest(baseUrl, "/organizations/roles", {
+      method: "POST", accessToken: recipientToken, body: { name: "Escalada", permissionCodes: ["companies.read"] },
+    });
+    assert.equal(deniedRoleCreate.response.status, 403, "Un asignador no puede crear roles.");
+
+    const inactiveRole = await apiRequest(baseUrl, `/organizations/roles/${companyReader.id}`, {
+      method: "PATCH", accessToken: adminToken, body: { status: "INACTIVE" },
+    });
+    assert.equal(inactiveRole.response.status, 200);
+    const afterRoleChange = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
+    assert.equal(afterRoleChange.response.status, 200);
+    assert.ok(!afterRoleChange.body.permissions.includes("companies.read"), "El cambio de rol debe surtir efecto en la siguiente solicitud.");
+    const assignmentList = await apiRequest(baseUrl, "/organizations/role-assignments?limit=100&offset=0", { accessToken: adminToken });
+    assert.equal(assignmentList.response.status, 200);
+    assert.ok(assignmentList.body.items.some((item) => item.scopeType === "BRANCH" && item.branchName));
+
+    const unassigned = await apiRequest(baseUrl, `/organizations/role-assignments/${managerAssignment.body.id}`, {
+      method: "DELETE", accessToken: adminToken,
+    });
+    assert.equal(unassigned.response.status, 204);
+    const afterUnassign = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
+    assert.ok(!afterUnassign.body.permissions.includes("roles.assign"), "Retirar una asignación debe revocar permisos de inmediato.");
+
+    const removeOnlyAdministrator = await apiRequest(baseUrl, `/organizations/role-assignments/${adminAssignmentId}`, {
+      method: "DELETE", accessToken: adminToken,
+    });
+    assert.equal(removeOnlyAdministrator.response.status, 409, "No se puede retirar la última asignación administradora.");
+    const adminRoleUpdate = await apiRequest(baseUrl, `/organizations/roles/${adminRoleResult.rows[0].id}`, {
+      method: "PATCH", accessToken: adminToken, body: { permissionCodes: ["companies.read"] },
+    });
+    assert.equal(adminRoleUpdate.response.status, 409, "No se puede modificar el rol de modo que se pierda el último administrador.");
+
+    await database.query("UPDATE organization_memberships SET status = 'SUSPENDED' WHERE id = $1::uuid", [recipientMembershipId]);
+    const suspendedAccess = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
+    assert.equal(suspendedAccess.response.status, 401, "Una membresía suspendida pierde acceso inmediatamente.");
+    const auditActions = await database.query(
+      `SELECT count(*)::int AS total FROM audit_events
+       WHERE organization_id = $1::uuid AND action IN ('ROLE_CREATED', 'ROLE_UPDATED', 'ROLE_ASSIGNED', 'ROLE_UNASSIGNED')`,
+      [organizationId],
+    );
+    assert.ok(auditActions.rows[0].total >= 8, "Las mutaciones de roles deben quedar auditadas.");
+    process.stdout.write("TASK-005 role integration: catálogo, escalada, admin final, suspensión y alcances tenant/empresa/sucursal correctos.\n");
+  } finally {
+    await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
+  }
+}
+
 async function verifyAuthentication(database, smtpPort, mailpitHttpPort, createApp) {
+  await database.query("DELETE FROM auth_rate_limits");
   const marker = randomUUID();
   const multiEmail = `task004.multi.${marker}@example.test`;
   const existingInviteEmail = `task004.existing.${marker}@example.test`;
@@ -1056,6 +1294,7 @@ try {
   const { createDatabasePool } = await import("../apps/api/dist/database.js");
   databasePool = createDatabasePool(testDatabaseUrl);
   await verifyDataModel(databasePool);
+  await verifyRoleManagement(databasePool, createApp);
   await verifyAuthentication(databasePool, hostPorts.mailpitSmtp, hostPorts.mailpitHttp, createApp);
   await verifyAuditAndEmail(databasePool, hostPorts.mailpitSmtp, hostPorts.mailpitHttp);
   const app = createApp({

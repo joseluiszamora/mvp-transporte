@@ -112,6 +112,85 @@ export const openApiDocument = {
         responses: { "202": { description: "Respuesta genérica de aceptación." }, "403": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/organizations/roles/permissions": {
+      get: {
+        summary: "Lista los permisos editables disponibles para roles del tenant actual.",
+        operationId: "listRolePermissionCatalog",
+        security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Catálogo sin permisos de plataforma.", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/PermissionCatalogItem" } } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/organizations/roles": {
+      get: {
+        summary: "Lista roles del tenant con permisos y paginación.",
+        operationId: "listOrganizationRoles",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de roles.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfRoles" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Crea un rol personalizado sin conceder permisos ajenos al actor.",
+        operationId: "createOrganizationRole",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CreateRoleRequest" } } } },
+        responses: { "201": { description: "Rol creado.", content: { "application/json": { schema: { $ref: "#/components/schemas/OrganizationRoleMutationResult" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/organizations/roles/{roleId}": {
+      patch: {
+        summary: "Actualiza nombre, estado o permisos de un rol del tenant.",
+        operationId: "updateOrganizationRole",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "roleId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/UpdateRoleRequest" } } } },
+        responses: { "200": { description: "Rol actualizado.", content: { "application/json": { schema: { $ref: "#/components/schemas/OrganizationRoleMutationResult" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/organizations/role-assignments": {
+      get: {
+        summary: "Lista asignaciones de roles del tenant con alcance y paginación.",
+        operationId: "listOrganizationRoleAssignments",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de asignaciones.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfRoleAssignments" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Asigna un rol a una membresía dentro del alcance autorizado del actor.",
+        operationId: "createOrganizationRoleAssignment",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/RoleAssignmentMutation" } } } },
+        responses: { "201": { description: "Asignación creada.", content: { "application/json": { schema: { $ref: "#/components/schemas/RoleAssignmentCreated" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/organizations/role-assignments/{assignmentId}": {
+      delete: {
+        summary: "Retira una asignación sin dejar al tenant sin administrador activo.",
+        operationId: "deleteOrganizationRoleAssignment",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "assignmentId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "204": { description: "Asignación retirada." }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/organizations/role-assignment-options": {
+      get: {
+        summary: "Lista membresías, empresas o sucursales activas del tenant para formular asignaciones.",
+        operationId: "listRoleAssignmentOptions",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "kind", required: true, schema: { type: "string", enum: ["memberships", "companies", "branches"] } },
+          { in: "query", name: "companyId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 100 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Opciones activas del tenant.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfRoleAssignmentOptions" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/platform/organizations": {
       post: {
         summary: "Crea un tenant, su rol inicial de administrador y una invitación.",
@@ -257,6 +336,91 @@ export const openApiDocument = {
           token: { type: "string", minLength: 32, maxLength: 128 },
           password: { type: "string", minLength: 12, maxLength: 1024 },
         },
+      },
+      CreateRoleRequest: {
+        type: "object",
+        required: ["name", "permissionCodes"],
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 120 },
+          permissionCodes: { type: "array", maxItems: 100, uniqueItems: true, items: { type: "string", maxLength: 100 } },
+        },
+        additionalProperties: false,
+      },
+      UpdateRoleRequest: {
+        type: "object",
+        minProperties: 1,
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 120 },
+          status: { type: "string", enum: ["ACTIVE", "INACTIVE"] },
+          permissionCodes: { type: "array", maxItems: 100, uniqueItems: true, items: { type: "string", maxLength: 100 } },
+        },
+        additionalProperties: false,
+      },
+      PermissionCatalogItem: {
+        type: "object", required: ["code", "description"], additionalProperties: false,
+        properties: { code: { type: "string" }, description: { type: "string" } },
+      },
+      OrganizationRole: {
+        type: "object", required: ["id", "code", "name", "status", "permissions", "assignmentCount", "createdAt"], additionalProperties: false,
+        properties: {
+          id: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" },
+          status: { type: "string", enum: ["ACTIVE", "INACTIVE"] }, permissions: { type: "array", items: { type: "string" } },
+          assignmentCount: { type: "integer" }, createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      OrganizationRoleMutationResult: {
+        type: "object", required: ["id", "code", "name", "status", "permissions"], additionalProperties: false,
+        properties: {
+          id: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" },
+          status: { type: "string", enum: ["ACTIVE", "INACTIVE"] }, permissions: { type: "array", items: { type: "string" } },
+        },
+      },
+      RoleAssignmentCreated: {
+        type: "object", required: ["id", "membershipId", "roleId", "scopeType", "companyId", "branchId"], additionalProperties: false,
+        properties: {
+          id: { type: "string", format: "uuid" }, membershipId: { type: "string", format: "uuid" }, roleId: { type: "string", format: "uuid" },
+          scopeType: { type: "string", enum: ["ORGANIZATION", "COMPANY", "BRANCH"] },
+          companyId: { type: ["string", "null"], format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" },
+        },
+      },
+      RoleAssignment: {
+        type: "object", required: ["id", "membershipId", "userEmail", "userDisplayName", "roleId", "roleCode", "roleName", "roleStatus", "scopeType", "companyId", "companyName", "branchId", "branchName", "createdAt"], additionalProperties: false,
+        properties: {
+          id: { type: "string", format: "uuid" }, membershipId: { type: "string", format: "uuid" },
+          userEmail: { type: "string", format: "email" }, userDisplayName: { type: "string" }, roleId: { type: "string", format: "uuid" },
+          roleCode: { type: "string" }, roleName: { type: "string" }, roleStatus: { type: "string", enum: ["ACTIVE", "INACTIVE"] },
+          scopeType: { type: "string", enum: ["ORGANIZATION", "COMPANY", "BRANCH"] },
+          companyId: { type: ["string", "null"], format: "uuid" }, companyName: { type: ["string", "null"] },
+          branchId: { type: ["string", "null"], format: "uuid" }, branchName: { type: ["string", "null"] }, createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      RoleAssignmentOption: {
+        type: "object", required: ["id", "name", "detail"], additionalProperties: false,
+        properties: { id: { type: "string", format: "uuid" }, name: { type: "string" }, detail: { type: "string" } },
+      },
+      PageOfRoles: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/OrganizationRole" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      PageOfRoleAssignments: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/RoleAssignment" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      PageOfRoleAssignmentOptions: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/RoleAssignmentOption" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      RoleAssignmentMutation: {
+        type: "object",
+        required: ["membershipId", "roleId", "scopeType"],
+        properties: {
+          membershipId: { type: "string", format: "uuid" },
+          roleId: { type: "string", format: "uuid" },
+          scopeType: { type: "string", enum: ["ORGANIZATION", "COMPANY", "BRANCH"] },
+          companyId: { type: "string", format: "uuid" },
+          branchId: { type: "string", format: "uuid" },
+        },
+        additionalProperties: false,
       },
       SelectOrganizationRequest: {
         type: "object",

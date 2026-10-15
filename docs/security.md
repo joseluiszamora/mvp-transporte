@@ -10,6 +10,14 @@ Una sesión activa no demuestra identidad física del dispositivo. Otro navegado
 No incluir contraseñas/tokens/secrets en logs o auditoría. SMTP secreto solo por backend, cifrado en BD con clave externa al repositorio o mediante referencia segura de entorno; respuesta de configuración oculta credencial. El frontend nunca recibe contraseña SMTP. No permitir rutas arbitrarias de archivos, HTML inseguro ni adjuntos públicos por defecto.
 Tokens activación y recuperación: aleatorios fuertes, hash almacenado, un solo uso; propuesta inicial activación 24h, recuperación 30min, configurable con límites seguros. No permitir que un administrador asigne privilegios fuera de su propio alcance ni retire al último administrador de una organización activa.
 
+## Roles y asignaciones (TASK-005)
+
+- El catálogo de permisos es global e inmutable; los roles editables pertenecen a un solo tenant. Los roles de tenant no pueden contener permisos `organizations.*`.
+- Crear o editar roles exige permiso `roles.create` o `roles.update` a nivel de organización. Cada permiso propuesto debe estar dentro de los permisos efectivos del actor en ese tenant.
+- Una asignación verifica en PostgreSQL la membresía, rol, empresa y sucursal activos y del mismo tenant. El actor debe tener `roles.assign` y todos los permisos del rol en el alcance solicitado; un alcance de sucursal no se amplía a otra sucursal ni a toda la empresa.
+- Cambios de rol o asignación se serializan por tenant dentro de una transacción y se auditan. La autorización vuelve a leer membresía, estado de rol y permisos en cada solicitud; cambios y suspensiones se aplican de inmediato.
+- El tenant debe conservar al menos una membresía activa de usuario activo con un rol activo asignado a nivel de organización que contenga todo el catálogo de permisos de cliente. Editar esos permisos, desactivar el rol o retirar la asignación que quitaría al último administrador se rechaza dentro de la misma transacción.
+
 ## Implementación de TASK-004 (15/10/2026)
 
 - Las contraseñas se derivan con Argon2id (`memoryCost=19456 KiB`, `timeCost=2`, `parallelism=1`); también se verifica una contraseña ficticia para aproximar el costo de un login con correo inexistente. El límite es 12 caracteres Unicode y 1024 bytes UTF-8.
