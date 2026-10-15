@@ -16,9 +16,12 @@ function getDockerCommand() {
   }
 
   if (process.platform === "win32") {
+    const userProfile = process.env.USERPROFILE;
     const candidates = [
       process.env.LOCALAPPDATA &&
         join(process.env.LOCALAPPDATA, "Programs", "DockerDesktop", "resources", "bin", "docker.exe"),
+      userProfile &&
+        join(userProfile, "AppData", "Local", "Programs", "DockerDesktop", "resources", "bin", "docker.exe"),
       process.env.ProgramFiles &&
         join(process.env.ProgramFiles, "Docker", "Docker", "resources", "bin", "docker.exe"),
     ].filter((candidate) => candidate !== undefined);

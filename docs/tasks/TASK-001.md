@@ -1,5 +1,5 @@
 # TASK-001 — Fundamentos
-Estado: en desarrollo. Dependencias: —. Issue GitHub: [#1](https://github.com/joseluiszamora/mvp-transporte/issues/1).
+Estado: en revisión técnica; revisión manual pendiente y aceptación funcional pendiente. Dependencias: —. Issue GitHub: [#1](https://github.com/joseluiszamora/mvp-transporte/issues/1).
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -26,9 +26,10 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run lint`: correcto.
 - `npm run typecheck`: correcto.
 - `npm test`: correcto, 3 pruebas unitarias.
-- `npm run build`: correcto.
-- Conexión local configurada en `.env` (ignorado por Git): health 200 y readiness 200 (`SELECT 1`). No se ejecutaron migraciones ni escrituras sobre la base.
+- `npm run build`: correcto; Vite advierte que el bundle principal supera 500 kB minificado.
+- Conexión local configurada en `.env` (ignorado por Git): health 200 y readiness 200 (`SELECT 1`). Una consulta `READ ONLY` confirmó `localhost:5432/mvp_backend` y que aún no existe `public._prisma_migrations`.
+- Migraciones: no hay esquema Prisma ni archivos/comandos de migración en TASK-001. Según `docs/decisions.md` y README, el modelo y las migraciones iniciales corresponden a TASK-002; no se aplicaron cambios de esquema a `mvp_backend`.
 - `npm run test:integration`: correcto con PostgreSQL desechable en Docker Compose; la comprobación PostgreSQL/API pasó y Compose eliminó el contenedor y la red temporales. El script no lee `DATABASE_URL` del entorno. En Windows localiza Docker Desktop en las rutas de instalación habituales y permite configurar `DOCKER_CLI_PATH` si la instalación está en otra ruta.
-- Revisión manual en navegador: pendiente.
+- Revisión manual en navegador: pendiente; la automatización no pudo identificar con suficiente confianza la URL activa.
 
 No marcar como aceptada: falta revisar manualmente el shell. La aceptación funcional corresponde al propietario.
