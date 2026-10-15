@@ -12,4 +12,4 @@ Día 1: arranque/tenant; 2: login/sesiones; 3: roles/alcances; 4: catálogos/con
 ## Estado verificado 15/10/2026
 - TASK-001: aceptación funcional confirmada por el propietario; PR #14 integrado en `main`, CI aprobada y issue #1 cerrada.
 - TASK-002: PR #15 integrado en `main` con CI aprobada; issue #2 abierta hasta aceptación funcional. La integración de TASK-003 usa una base desechable y no aplica migraciones a producción ni a la base persistente local.
-- TASK-003: implementación y validaciones técnicas locales completas en `task/003-auditoria-correo`; issue #3 abierta y en revisión hasta aceptación funcional. PR/CI remotos pendientes.
+- TASK-003: entrega registrada en PR #16; validaciones locales y CI remota aprobadas. Issue #3 abierta hasta aceptación funcional del propietario.

@@ -1,5 +1,5 @@
 # TASK-003 — Auditoría y correo mínimos
-Estado: en revisión técnica local. Dependencias: 002. Issue GitHub: [#3](https://github.com/joseluiszamora/mvp-transporte/issues/3).
+Estado: en revisión funcional tras validación técnica. Dependencias: 002. Issue GitHub: [#3](https://github.com/joseluiszamora/mvp-transporte/issues/3).
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -18,4 +18,4 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - La integración desechable aplicó TASK-002 y TASK-003 sobre PostgreSQL 18, cargó fixtures aislados y entregó un correo SMTP real a Mailpit.
 - Se verificaron rollback conjunto de cambio/auditoría/outbox, sanitización de before/after y errores, append-only (UPDATE/DELETE/TRUNCATE), cifrado del payload, deduplicación por evento, reintento y cierre de lease agotado.
 - Las pantallas de historial/configuración y sus endpoints administrativos se mantienen en las tareas ADM-07/ADM-09 indicadas por el alcance aprobado; TASK-003 entrega servicios internos, migración, plantillas y worker.
-- Pendiente: revisión técnica remota/CI del PR y aceptación funcional del propietario. No se aplicó la migración a una base persistente ni se desplegó producción.
+- CI remota del PR aprobada; la aceptación funcional corresponde al propietario. No se aplicó la migración a una base persistente ni se desplegó producción.
