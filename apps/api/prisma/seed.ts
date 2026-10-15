@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/client.ts";
+import { tenantAdminPermissionCodes } from "../src/modules/access/permission-catalog.ts";
 
 const developmentEnvironments = new Set(["development", "test"]);
 const localDatabaseHosts = new Set(["localhost", "127.0.0.1", "::1"]);
@@ -60,7 +61,7 @@ const permissions = [
 ] as const;
 
 const tenantPermissions: Record<string, readonly string[]> = {
-  admin: permissions.filter(([code]) => !code.startsWith("organizations.")).map(([code]) => code),
+  admin: tenantAdminPermissionCodes,
   supervisor: [
     "companies.read",
     "branches.read",

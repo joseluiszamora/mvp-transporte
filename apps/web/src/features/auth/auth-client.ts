@@ -1,0 +1,296 @@
+import type {
+  AccountTokenInspectionResponse,
+  AuthCredentialsResponse,
+  CreatedOrganizationResponse,
+  CurrentUserResponse,
+  OrganizationUserItem,
+  PageResponse,
+  SelectOrganizationResponse,
+} from "@mvp-transporte/contracts";
+
+const csrfCookieName = "mvp_csrf";
+const authChannelName = "mvp-transporte-auth";
+const authChannel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(authChannelName);
+
+let accessToken: string | null = null;
+let accessTokenExpiresAt = 0;
+let refreshPromise: Promise<boolean> | null = null;
+const sessionListeners = new Set<() => void>();
+
+export class AuthClientError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+export function getApiBaseUrl(): string {
+  const configuredUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:4000/api/v1";
+  return configuredUrl.replace(/\/+$/u, "");
+}
+
+function notifySessionChange(): void {
+  for (const listener of sessionListeners) {
+    listener();
+  }
+}
+
+function setAccessToken(token: string, expiresAt: string, broadcast = true): void {
+  accessToken = token;
+  const parsedExpiry = Date.parse(expiresAt);
+  accessTokenExpiresAt = Number.isFinite(parsedExpiry) ? parsedExpiry : Date.now() + 60_000;
+  if (broadcast) {
+    authChannel?.postMessage({ type: "token", token, expiresAt });
+  }
+  notifySessionChange();
+}
+
+function clearAccessToken(broadcast = true): void {
+  accessToken = null;
+  accessTokenExpiresAt = 0;
+  if (broadcast) {
+    authChannel?.postMessage({ type: "logout" });
+  }
+  notifySessionChange();
+}
+
+authChannel?.addEventListener("message", (event: MessageEvent<unknown>) => {
+  if (typeof event.data !== "object" || event.data === null) {
+    return;
+  }
+  const message = event.data as Record<string, unknown>;
+  if (message.type === "token" && typeof message.token === "string" && typeof message.expiresAt === "string") {
+    setAccessToken(message.token, message.expiresAt, false);
+  } else if (message.type === "logout") {
+    clearAccessToken(false);
+  }
+});
+
+export function subscribeAuthChanges(listener: () => void): () => void {
+  sessionListeners.add(listener);
+  return () => sessionListeners.delete(listener);
+}
+
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const match = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  return match ? match.slice(name.length + 1) : null;
+}
+
+async function readError(response: Response): Promise<AuthClientError> {
+  let body: { error?: { code?: string; message?: string } } | null = null;
+  try {
+    body = (await response.json()) as { error?: { code?: string; message?: string } };
+  } catch {
+    body = null;
+  }
+  return new AuthClientError(
+    response.status,
+    body?.error?.code ?? "REQUEST_FAILED",
+    body?.error?.message ?? "No fue posible completar la solicitud.",
+  );
+}
+
+async function applyCredentials(response: Response): Promise<AuthCredentialsResponse> {
+  const credentials = (await response.json()) as AuthCredentialsResponse;
+  setAccessToken(credentials.accessToken, credentials.accessTokenExpiresAt);
+  return credentials;
+}
+
+async function refreshOnce(failedToken?: string | null): Promise<boolean> {
+  const currentToken = accessToken;
+  if (failedToken && currentToken && currentToken !== failedToken && accessTokenExpiresAt > Date.now() + 30_000) {
+    return true;
+  }
+  if (!failedToken && currentToken && accessTokenExpiresAt > Date.now() + 30_000) {
+    return true;
+  }
+  const csrfToken = readCookie(csrfCookieName);
+  if (!csrfToken) {
+    clearAccessToken();
+    return false;
+  }
+  const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      clearAccessToken();
+    }
+    return false;
+  }
+  await applyCredentials(response);
+  return true;
+}
+
+export async function refreshSession(failedToken?: string | null): Promise<boolean> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+  const operation = async (): Promise<boolean> => {
+    const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+    if (!locks) {
+      return refreshOnce(failedToken);
+    }
+    return locks.request("mvp-transporte:auth-refresh", { mode: "exclusive" }, () => refreshOnce(failedToken));
+  };
+  refreshPromise = operation().finally(() => {
+    refreshPromise = null;
+  });
+  return refreshPromise;
+}
+
+export async function initializeAuth(): Promise<CurrentUserResponse | null> {
+  if (!(await refreshSession())) {
+    return null;
+  }
+  try {
+    return await apiRequest<CurrentUserResponse>("/auth/me");
+  } catch {
+    clearAccessToken();
+    return null;
+  }
+}
+
+export async function login(email: string, password: string): Promise<AuthCredentialsResponse> {
+  const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    throw await readError(response);
+  }
+  const credentials = await applyCredentials(response);
+  return credentials;
+}
+
+export async function logout(): Promise<void> {
+  const csrfToken = readCookie(csrfCookieName);
+  try {
+    if (csrfToken) {
+      await fetch(`${getApiBaseUrl()}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-CSRF-Token": csrfToken },
+      });
+    }
+  } finally {
+    clearAccessToken();
+  }
+}
+
+async function authorizedFetch(path: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const tokenBeforeRequest = accessToken;
+  const response = await fetch(`${getApiBaseUrl()}${path}`, { ...init, headers, credentials: "include" });
+  if (response.status === 401 && allowRefresh && tokenBeforeRequest) {
+    if (await refreshSession(tokenBeforeRequest)) {
+      const retryHeaders = new Headers(init.headers);
+      if (accessToken) {
+        retryHeaders.set("Authorization", `Bearer ${accessToken}`);
+      }
+      if (init.body && !retryHeaders.has("Content-Type")) {
+        retryHeaders.set("Content-Type", "application/json");
+      }
+      return fetch(`${getApiBaseUrl()}${path}`, { ...init, headers: retryHeaders, credentials: "include" });
+    }
+  }
+  return response;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  if (!accessToken && !(await refreshSession())) {
+    throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
+  }
+  const response = await authorizedFetch(path, init, true);
+  if (!response.ok) {
+    throw await readError(response);
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
+export async function publicRequest<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw await readError(response);
+  }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
+export async function loadCurrentUser(): Promise<CurrentUserResponse> {
+  return apiRequest<CurrentUserResponse>("/auth/me");
+}
+
+export async function selectOrganization(organizationId: string): Promise<CurrentUserResponse> {
+  const selected = await apiRequest<SelectOrganizationResponse>("/auth/select-organization", {
+    method: "POST",
+    body: JSON.stringify({ organizationId }),
+  });
+  setAccessToken(selected.accessToken, selected.accessTokenExpiresAt);
+  return loadCurrentUser();
+}
+
+export async function inspectActivation(token: string): Promise<AccountTokenInspectionResponse> {
+  return publicRequest<AccountTokenInspectionResponse>("/auth/activation/inspect", { token });
+}
+
+export async function completeActivation(token: string, password?: string): Promise<void> {
+  await publicRequest<void>("/auth/activation/complete", { token, ...(password ? { password } : {}) });
+}
+
+export async function requestRecovery(email: string): Promise<void> {
+  await publicRequest<void>("/auth/recovery", { email });
+}
+
+export async function completeRecovery(token: string, password: string): Promise<void> {
+  await publicRequest<void>("/auth/recovery/complete", { token, password });
+}
+
+export async function listOrganizationUsers(limit = 20, offset = 0): Promise<PageResponse<OrganizationUserItem>> {
+  return apiRequest<PageResponse<OrganizationUserItem>>(`/organizations/users?limit=${limit}&offset=${offset}`);
+}
+
+export async function inviteUser(email: string, displayName: string): Promise<void> {
+  await apiRequest<void>("/organizations/users/invitations", {
+    method: "POST",
+    body: JSON.stringify({ email, displayName }),
+  });
+}
+
+export async function createOrganization(input: {
+  organizationName: string;
+  adminEmail: string;
+  adminDisplayName: string;
+}): Promise<CreatedOrganizationResponse> {
+  return apiRequest<CreatedOrganizationResponse>("/platform/organizations", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}

@@ -3,18 +3,24 @@ import type { ErrorRequestHandler, Express } from "express";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import type { Pool } from "pg";
 import type { ApiErrorResponse, HealthResponse, ReadinessResponse } from "@mvp-transporte/contracts";
 import { openApiDocument } from "./openapi.ts";
+import { createAuthRouter } from "./modules/auth/auth-router.ts";
+import type { AuthSettings } from "./modules/auth/auth-service.ts";
 
 export interface AppDependencies {
   allowedOrigins?: readonly string[];
   checkDatabase?: () => Promise<void>;
+  database?: Pool;
+  authSettings?: AuthSettings;
 }
 
 export function createApp(dependencies: AppDependencies = {}): Express {
   const app = express();
   const allowedOrigins = dependencies.allowedOrigins ?? [];
   const checkDatabase = dependencies.checkDatabase ?? (async () => undefined);
+  const authSettings = dependencies.authSettings ?? { secureCookies: false };
 
   app.disable("x-powered-by");
   app.use((_request, response, next) => {
@@ -24,7 +30,7 @@ export function createApp(dependencies: AppDependencies = {}): Express {
     next();
   });
   app.use(helmet());
-  app.use(cors({ origin: [...allowedOrigins] }));
+  app.use(cors({ origin: [...allowedOrigins], credentials: true }));
   app.use(express.json({ limit: "64kb" }));
 
   app.get("/api/v1/health", (_request, response) => {
@@ -55,6 +61,8 @@ export function createApp(dependencies: AppDependencies = {}): Express {
   app.get("/api/v1/openapi.json", (_request, response) => {
     response.status(200).json(openApiDocument);
   });
+
+  app.use("/api/v1", createAuthRouter(dependencies.database, authSettings, allowedOrigins));
 
   app.use((_request, response) => {
     response.status(404).json({

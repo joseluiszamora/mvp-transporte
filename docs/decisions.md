@@ -38,3 +38,12 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 - 15/10/2026: el worker reclama outbox con `FOR UPDATE SKIP LOCKED`, lease y reintentos limitados. La entrega es al menos una vez; un fallo entre aceptación SMTP y confirmación PostgreSQL puede duplicar un mensaje.
 - 15/10/2026: si un lease expira después del último intento, el worker registra `DELIVERY_OUTCOME_UNKNOWN` y deja el mensaje en estado final `FAILED`; no reenvía automáticamente porque SMTP pudo aceptar el mensaje antes de caer el proceso.
 - 15/10/2026: `audit_events` declara actor `USER` o `SYSTEM`; un trigger rechaza update, delete y truncate. No se añade purga en TASK-003 porque el mínimo de retención no está aprobado; la política de purga requiere una tarea posterior.
+
+## Implementación de TASK-004
+
+- 15/10/2026: hashing con Argon2id (`m=19456 KiB`, `t=2`, `p=1`) y token access HS256 firmado con una clave Base64 canónica de 32 bytes. Se eligen parámetros conservadores para esta base inicial; los enlaces opacos de sesión/activación/recuperación se persisten como SHA-256.
+- 15/10/2026: los límites de intentos viven en PostgreSQL con claves hash de operación, IP e identidad; así sobreviven reinicios y comparten conteo entre procesos sin almacenar correos/IP en claro. Se limpia una muestra de contadores antiguos durante solicitudes.
+- 15/10/2026: refresh exige cookie doble `HttpOnly` + token CSRF legible y header coincidente, además de `Origin` exacto; CORS de credenciales queda limitado a `WEB_ORIGINS`. La cookie usa `SameSite=Lax`, `Secure` cuando `NODE_ENV=production` y path de autenticación.
+- 15/10/2026: aceptación de una invitación para una identidad existente requiere activación explícita del enlace. La operación solo crea la membresía y no sobrescribe perfil/contraseña global; la clave foránea compuesta vincula el `AccountToken` a la membresía de ese mismo usuario.
+- 15/10/2026: no se crea usuario plataforma predefinido ni se muestra una contraseña/token en consola. El administrador inicial se crea mediante CLI con confirmación escrita y completa su acceso con el enlace encolado por el outbox.
+- 15/10/2026: el cliente conserva access en memoria y usa `navigator.locks` para serializar refresh entre pestañas compatibles, con `BroadcastChannel` para compartir la sesión rotada; no se guarda el token en `localStorage`. La compatibilidad cross-tab en navegadores sin Web Locks queda como verificación manual previa a declarar soporte.
