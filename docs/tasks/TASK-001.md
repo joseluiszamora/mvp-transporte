@@ -1,5 +1,5 @@
 # TASK-001 — Fundamentos
-Estado: en revisión técnica y aceptación funcional pendiente. Dependencias: —. Issue GitHub: [#1](https://github.com/joseluiszamora/mvp-transporte/issues/1).
+Estado: aceptación funcional recibida del propietario (14/10/2026); revisión técnica e integración pendientes. Dependencias: —. Issue GitHub: [#1](https://github.com/joseluiszamora/mvp-transporte/issues/1).
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -32,4 +32,4 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run test:integration`: correcto con PostgreSQL desechable en Docker Compose; la comprobación PostgreSQL/API pasó y Compose eliminó el contenedor y la red temporales. El script no lee `DATABASE_URL` del entorno. En Windows localiza Docker Desktop en las rutas de instalación habituales y permite configurar `DOCKER_CLI_PATH` si la instalación está en otra ruta.
 - Revisión manual en navegador (14/10/2026): la instancia antigua de Vite que ocupaba `127.0.0.1:5173` mostraba la página en blanco. Tras reiniciar ese proceso, la interfaz cargó correctamente. Se comprobaron el resumen, API y base de datos disponibles, cambio de tema, menú responsive y ruta ADM-01 con estado vacío. No fue necesario cambiar código para resolver el problema.
 
-No marcar como aceptada: falta la aceptación funcional del propietario y la revisión técnica del PR. La aceptación funcional corresponde al propietario.
+La aceptación funcional del propietario se recibió el 14/10/2026. TASK-001 seguirá abierta hasta completar la revisión técnica e integrar la rama conforme a AGENTS.md.
