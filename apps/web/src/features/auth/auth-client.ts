@@ -1,6 +1,10 @@
 import type {
   AccountTokenInspectionResponse,
   AuthCredentialsResponse,
+  Catalog,
+  CatalogItem,
+  CatalogScope,
+  CatalogScopeOptions,
   BranchItem,
   CompanyItem,
   CreatedOrganizationResponse,
@@ -352,6 +356,49 @@ export async function updateTenantBranch(branchId: string, input: { code?: strin
 
 export async function deactivateTenantBranch(branchId: string): Promise<void> {
   await apiRequest<void>(`/organizations/branches/${encodeURIComponent(branchId)}`, { method: "DELETE" });
+}
+
+export async function listCatalogs(input: { limit?: number; offset?: number; search?: string; status?: RecordStatus; scope?: CatalogScope } = {}): Promise<PageResponse<Catalog>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  if (input.status) query.set("status", input.status);
+  if (input.scope) query.set("scope", input.scope);
+  return apiRequest<PageResponse<Catalog>>(`/catalogs?${query.toString()}`);
+}
+
+export async function listCatalogScopeOptions(limit = 100, offset = 0): Promise<CatalogScopeOptions> {
+  return apiRequest<CatalogScopeOptions>(`/catalogs/scope-options?limit=${limit}&offset=${offset}`);
+}
+
+export async function createCatalog(input: { code: string; name: string; description?: string | null; scope: Exclude<CatalogScope, "GLOBAL">; companyId?: string }): Promise<Catalog> {
+  return apiRequest<Catalog>("/catalogs", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateCatalog(catalogId: string, input: { name?: string; description?: string | null; status?: RecordStatus }): Promise<Catalog> {
+  return apiRequest<Catalog>(`/catalogs/${encodeURIComponent(catalogId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function deactivateCatalog(catalogId: string): Promise<void> {
+  await apiRequest<void>(`/catalogs/${encodeURIComponent(catalogId)}`, { method: "DELETE" });
+}
+
+export async function listCatalogItems(catalogId: string, input: { limit?: number; offset?: number; search?: string; status?: RecordStatus } = {}): Promise<PageResponse<CatalogItem>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  if (input.status) query.set("status", input.status);
+  return apiRequest<PageResponse<CatalogItem>>(`/catalogs/${encodeURIComponent(catalogId)}/items?${query.toString()}`);
+}
+
+export async function createCatalogItem(catalogId: string, input: { code: string; name: string; description?: string | null }): Promise<CatalogItem> {
+  return apiRequest<CatalogItem>(`/catalogs/${encodeURIComponent(catalogId)}/items`, { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateCatalogItem(catalogId: string, itemId: string, input: { code?: string; name?: string; description?: string | null; status?: RecordStatus }): Promise<CatalogItem> {
+  return apiRequest<CatalogItem>(`/catalogs/${encodeURIComponent(catalogId)}/items/${encodeURIComponent(itemId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function deactivateCatalogItem(catalogId: string, itemId: string): Promise<void> {
+  await apiRequest<void>(`/catalogs/${encodeURIComponent(catalogId)}/items/${encodeURIComponent(itemId)}`, { method: "DELETE" });
 }
 
 export async function listRolePermissionCatalog(): Promise<PermissionCatalogItem[]> {

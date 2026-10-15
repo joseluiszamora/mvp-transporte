@@ -142,6 +142,42 @@ export interface CreatedOrganizationResponse {
 
 export type OrganizationStatus = "ACTIVE" | "SUSPENDED";
 export type RecordStatus = "ACTIVE" | "INACTIVE";
+export type CatalogScope = "GLOBAL" | "ORGANIZATION" | "COMPANY";
+
+export interface CatalogItem {
+  id: string;
+  catalogId: string;
+  code: string;
+  name: string;
+  description: string | null;
+  status: RecordStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Catalog {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  scope: CatalogScope;
+  organizationId: string | null;
+  companyId: string | null;
+  companyName: string | null;
+  status: RecordStatus;
+  protected: boolean;
+  canManage: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatalogScopeOptions {
+  organization: boolean;
+  companies: Array<{ id: string; legalName: string }>;
+  totalCompanies: number;
+  limit: number;
+  offset: number;
+}
 
 export interface PlatformOrganizationItem {
   id: string;

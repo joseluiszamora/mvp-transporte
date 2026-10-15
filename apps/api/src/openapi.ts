@@ -281,6 +281,103 @@ export const openApiDocument = {
         responses: { "200": { description: "Opciones activas del tenant.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfRoleAssignmentOptions" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/catalogs": {
+      get: {
+        summary: "Lista catálogos globales de solo lectura y catálogos propios autorizados.",
+        operationId: "listCatalogs",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+          { in: "query", name: "search", schema: { type: "string", maxLength: 160 } },
+          { in: "query", name: "status", schema: { type: "string", enum: ["ACTIVE", "INACTIVE"] } },
+          { in: "query", name: "scope", schema: { type: "string", enum: ["GLOBAL", "ORGANIZATION", "COMPANY"] } },
+        ],
+        responses: { "200": { description: "Página de catálogos accesibles.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfCatalogs" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Crea un catálogo propio en el tenant o empresa autorizados.",
+        operationId: "createCatalog",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CatalogMutation" } } } },
+        responses: { "201": { description: "Catálogo creado.", content: { "application/json": { schema: { $ref: "#/components/schemas/Catalog" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/catalogs/scope-options": {
+      get: {
+        summary: "Lista alcances de catálogo y empresas en las que el actor puede gestionar catálogos.",
+        operationId: "listCatalogScopeOptions",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 100 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Opciones de alcance autorizadas.", content: { "application/json": { schema: { $ref: "#/components/schemas/CatalogScopeOptions" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/catalogs/{catalogId}": {
+      patch: {
+        summary: "Actualiza o desactiva un catálogo propio; los protegidos no se modifican.",
+        operationId: "updateCatalog",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "catalogId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CatalogUpdate" } } } },
+        responses: { "200": { description: "Catálogo actualizado.", content: { "application/json": { schema: { $ref: "#/components/schemas/Catalog" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+      delete: {
+        summary: "Desactiva el catálogo y conserva su historial.",
+        operationId: "deactivateCatalog",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "catalogId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "204": { description: "Catálogo desactivado." }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/catalogs/{catalogId}/items": {
+      get: {
+        summary: "Lista opciones de un catálogo accesible.",
+        operationId: "listCatalogItems",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "path", name: "catalogId", required: true, schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+          { in: "query", name: "search", schema: { type: "string", maxLength: 160 } },
+          { in: "query", name: "status", schema: { type: "string", enum: ["ACTIVE", "INACTIVE"] } },
+        ],
+        responses: { "200": { description: "Página de opciones.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfCatalogItems" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Agrega una opción a un catálogo propio activo.",
+        operationId: "createCatalogItem",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "catalogId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CatalogItemMutation" } } } },
+        responses: { "201": { description: "Opción creada.", content: { "application/json": { schema: { $ref: "#/components/schemas/CatalogItem" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/catalogs/{catalogId}/items/{itemId}": {
+      patch: {
+        summary: "Actualiza o desactiva una opción sin borrar la fila.",
+        operationId: "updateCatalogItem",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "path", name: "catalogId", required: true, schema: { type: "string", format: "uuid" } },
+          { in: "path", name: "itemId", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/CatalogItemUpdate" } } } },
+        responses: { "200": { description: "Opción actualizada." }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+      delete: {
+        summary: "Desactiva una opción y mantiene su identificador para referencias históricas.",
+        operationId: "deactivateCatalogItem",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "path", name: "catalogId", required: true, schema: { type: "string", format: "uuid" } },
+          { in: "path", name: "itemId", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        responses: { "204": { description: "Opción desactivada." }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/platform/organizations": {
       get: {
         summary: "Lista tenants para administración de plataforma.",
@@ -471,6 +568,47 @@ export const openApiDocument = {
       PermissionCatalogItem: {
         type: "object", required: ["code", "description"], additionalProperties: false,
         properties: { code: { type: "string" }, description: { type: "string" } },
+      },
+      Catalog: {
+        type: "object", required: ["id", "code", "name", "description", "scope", "organizationId", "companyId", "companyName", "status", "protected", "canManage", "createdAt", "updatedAt"], additionalProperties: false,
+        properties: {
+          id: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" }, description: { type: ["string", "null"] },
+          scope: { type: "string", enum: ["GLOBAL", "ORGANIZATION", "COMPANY"] }, organizationId: { type: ["string", "null"], format: "uuid" },
+          companyId: { type: ["string", "null"], format: "uuid" }, companyName: { type: ["string", "null"] }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] },
+          protected: { type: "boolean" }, canManage: { type: "boolean" }, createdAt: { type: "string", format: "date-time" }, updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      CatalogItem: {
+        type: "object", required: ["id", "catalogId", "code", "name", "description", "status", "createdAt", "updatedAt"], additionalProperties: false,
+        properties: { id: { type: "string", format: "uuid" }, catalogId: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" }, description: { type: ["string", "null"] }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] }, createdAt: { type: "string", format: "date-time" }, updatedAt: { type: "string", format: "date-time" } },
+      },
+      CatalogMutation: {
+        type: "object", required: ["code", "name", "scope"], additionalProperties: false,
+        properties: { code: { type: "string", minLength: 1, maxLength: 80 }, name: { type: "string", minLength: 1, maxLength: 160 }, description: { type: ["string", "null"], maxLength: 500 }, scope: { type: "string", enum: ["ORGANIZATION", "COMPANY"] }, companyId: { type: "string", format: "uuid" } },
+      },
+      CatalogUpdate: {
+        type: "object", minProperties: 1, additionalProperties: false,
+        properties: { name: { type: "string", minLength: 1, maxLength: 160 }, description: { type: ["string", "null"], maxLength: 500 }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] } },
+      },
+      CatalogItemMutation: {
+        type: "object", required: ["code", "name"], additionalProperties: false,
+        properties: { code: { type: "string", minLength: 1, maxLength: 80 }, name: { type: "string", minLength: 1, maxLength: 160 }, description: { type: ["string", "null"], maxLength: 500 } },
+      },
+      CatalogItemUpdate: {
+        type: "object", minProperties: 1, additionalProperties: false,
+        properties: { code: { type: "string", minLength: 1, maxLength: 80 }, name: { type: "string", minLength: 1, maxLength: 160 }, description: { type: ["string", "null"], maxLength: 500 }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] } },
+      },
+      CatalogScopeOptions: {
+        type: "object", required: ["organization", "companies", "totalCompanies", "limit", "offset"], additionalProperties: false,
+        properties: { organization: { type: "boolean" }, companies: { type: "array", items: { type: "object", required: ["id", "legalName"], additionalProperties: false, properties: { id: { type: "string", format: "uuid" }, legalName: { type: "string" } } } }, totalCompanies: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      PageOfCatalogs: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/Catalog" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      PageOfCatalogItems: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/CatalogItem" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
       },
       OrganizationRole: {
         type: "object", required: ["id", "code", "name", "status", "permissions", "assignmentCount", "createdAt"], additionalProperties: false,

@@ -18,6 +18,12 @@ Tokens activación y recuperación: aleatorios fuertes, hash almacenado, un solo
 - Cambios de rol o asignación se serializan por tenant dentro de una transacción y se auditan. La autorización vuelve a leer membresía, estado de rol y permisos en cada solicitud; cambios y suspensiones se aplican de inmediato.
 - El tenant debe conservar al menos una membresía activa de usuario activo con un rol activo asignado a nivel de organización que contenga todo el catálogo de permisos de cliente. Editar esos permisos, desactivar el rol o retirar la asignación que quitaría al último administrador se rechaza dentro de la misma transacción.
 
+## Catálogos (TASK-007)
+
+- Catálogos y opciones de organización/empresa se filtran por la membresía seleccionada y por el alcance exacto de `catalogs.read/manage`. No se confía en IDs de empresa recibidos del navegador.
+- Catálogos globales están protegidos y son de solo lectura para clientes; se muestran solo con `catalogs.read` en la organización actual. Un permiso acotado a empresa o sucursal no se amplía a otra empresa.
+- Desactivar es una baja lógica. Los módulos consumidores deben seleccionar solo opciones activas de catálogos activos; las referencias históricas conservan el ID y no se borran en cascada.
+
 ## Implementación de TASK-004 (15/10/2026)
 
 - Las contraseñas se derivan con Argon2id (`memoryCost=19456 KiB`, `timeCost=2`, `parallelism=1`); también se verifica una contraseña ficticia para aproximar el costo de un login con correo inexistente. El límite es 12 caracteres Unicode y 1024 bytes UTF-8.
