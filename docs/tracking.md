@@ -13,3 +13,4 @@ Día 1: arranque/tenant; 2: login/sesiones; 3: roles/alcances; 4: catálogos/con
 - TASK-001: aceptación funcional confirmada por el propietario; PR #14 integrado en `main`, CI aprobada y issue #1 cerrada.
 - TASK-002: PR #15 integrado en `main` con CI aprobada; issue #2 abierta hasta aceptación funcional. La integración de TASK-003 usa una base desechable y no aplica migraciones a producción ni a la base persistente local.
 - TASK-003: entrega registrada en PR #16; validaciones locales y CI remota aprobadas. Issue #3 abierta hasta aceptación funcional del propietario.
+- TASK-004: commit `a880d57` en la rama `task/004-autenticacion-alta`, PR #17 abierto desde el merge real `8546fb0` (PR #16). Validaciones locales completas; CI remota en ejecución. Issue #4 abierta hasta aceptación funcional. Integración probó autenticación contra PostgreSQL/Mailpit desechables; no se usó la base local persistente. Falta prueba manual de pantallas y varias pestañas.

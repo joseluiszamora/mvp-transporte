@@ -49,7 +49,27 @@ Guárdala como `EMAIL_PAYLOAD_ENCRYPTION_KEY` en `.env` y no la compartas ni la 
 
 El transporte SMTP ofrece entrega al menos una vez: si el proceso cae después de que el servidor acepte el correo pero antes de guardar ese resultado en PostgreSQL, un reintento puede duplicarlo.
 
-`npm run test:integration` inicia PostgreSQL desechable en `tmpfs` junto con Mailpit y usa puertos locales libres. Aplica las migraciones y fixtures; verifica restricciones de tenant/scope/sesión, rollback de auditoría y outbox, sanitización, deduplicación, reintento y entrega SMTP real al buzón temporal. Al finalizar elimina ese proyecto sin tocar la base local persistente.
+## Acceso inicial y autenticación
+
+Configura dos secretos distintos en `.env`: `ACCESS_TOKEN_SECRET` y `EMAIL_PAYLOAD_ENCRYPTION_KEY`. Para generar cada uno, ejecuta el siguiente comando por separado y guarda su salida solo en `.env`:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+Verifica que `PUBLIC_WEB_URL` sea la URL de la web y que `WEB_ORIGINS` contenga su origen exacto. En desarrollo local se usa `http://127.0.0.1:5173`; producción requiere HTTPS para activar cookies `Secure`.
+
+Después de aplicar migraciones y configurar correo, crea el primer administrador de plataforma con:
+
+```sh
+npm run bootstrap:platform-admin
+```
+
+El comando solicita correo, nombre y confirmación escrita. Crea una cuenta pendiente y encola un enlace de activación; no genera ni muestra una contraseña o el token. Inicia `npm run dev:email-worker` para que SMTP entregue el mensaje. En desarrollo, abre el enlace desde la bandeja de Mailpit en `http://127.0.0.1:8025`. El administrador define su contraseña al activar la cuenta; luego puede iniciar sesión en `http://127.0.0.1:5173/login` y crear una organización con su administración inicial.
+
+El access token dura 15 minutos y solo vive en memoria del navegador. El refresh token se guarda en cookie HttpOnly y rota; la sesión global vence a los siete días y un nuevo login reemplaza la sesión anterior. La recuperación devuelve la misma respuesta aunque el correo no exista.
+
+`npm run test:integration` inicia PostgreSQL desechable en `tmpfs` junto con Mailpit y usa puertos locales libres. Aplica todas las migraciones y fixtures; verifica restricciones de tenant/scope/sesión, auditoría y outbox, rotación/replay, login concurrente, selección multitenant, autorización, activación/invitaciones, recuperación, rate limit y entrega SMTP real al buzón temporal. Al finalizar elimina ese proyecto sin tocar la base local persistente.
 
 ## Validaciones
 
@@ -65,4 +85,4 @@ La integración crea un proyecto Compose temporal y monta los datos de PostgreSQ
 
 ## Seguridad y estado
 
-La readiness no devuelve datos de conexión ni mensajes internos. El shell solo consulta health/readiness y muestra los diez módulos como pendientes; no ofrece acceso simulado ni datos privados. La autorización ya tiene servicios base de contexto y scope; las rutas y pantallas funcionales siguen en tareas posteriores.
+La readiness no devuelve datos de conexión ni mensajes internos. TASK-004 agrega login, activación, recuperación, selector de organización, listado e invitaciones de membresía y alta inicial de organización. La administración de roles/scope y el resto de módulos se entrega en las tareas siguientes; los módulos sin implementar se muestran como pendientes.
