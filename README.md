@@ -19,11 +19,22 @@ La API queda en `http://127.0.0.1:4000`; su health check es `/api/v1/health`, re
 
 Si todavía no configuraste PostgreSQL, la API puede iniciar sin `DATABASE_URL`: health responde normalmente y readiness devuelve `503` hasta que la conexión esté disponible. No hace falta configurar una base real para revisar el shell web.
 
-## Migraciones y seed
+## Prisma, migraciones y fixtures
 
-TASK-001 no crea todavía el modelo de negocio, migraciones ni cuentas iniciales. TASK-002 añadirá el esquema Prisma y los comandos de migración; las tareas posteriores definirán datos de desarrollo seguros. No existe una cuenta inicial con contraseña fija.
+TASK-002 mantiene el esquema en `apps/api/prisma/schema.prisma` y las migraciones versionadas en `apps/api/prisma/migrations/`. Prisma lee `DATABASE_URL` del entorno o del `.env` en la raíz.
 
-Cuando se incorporen migraciones y seed, sus comandos se documentarán aquí y solo deberán ejecutarse contra una base local o desechable. No apuntes los comandos de validación a producción.
+```sh
+npm run db:generate
+npm run db:migrate:dev
+npm run db:migrate:deploy
+npm run db:seed
+```
+
+`db:migrate:dev` crea y aplica migraciones durante el desarrollo local. `db:migrate:deploy` aplica migraciones ya creadas; úsalo solo contra desarrollo o una base de pruebas. Ningún comando local debe apuntar a producción.
+
+`db:seed` solo funciona con `NODE_ENV=development` o con el entorno de prueba marcado por el script de integración, y exige un host PostgreSQL local. Crea dos tenants, empresas, sucursales, usuarios de fixture pendientes de activación y los cuatro roles iniciales. No fija ni muestra contraseñas; los usuarios no pueden iniciar sesión hasta completar activación.
+
+`npm run test:integration` inicia una instancia Compose desechable en `tmpfs`, aplica las migraciones, carga los fixtures y verifica las restricciones de tenant, scope y sesión. Al finalizar elimina ese proyecto temporal sin tocar la base local persistente.
 
 ## Validaciones
 
@@ -39,4 +50,4 @@ La integración crea un proyecto Compose temporal y monta los datos de PostgreSQ
 
 ## Seguridad y estado
 
-La readiness no devuelve datos de conexión ni mensajes internos. El shell solo consulta health/readiness y muestra los diez módulos como pendientes; no ofrece acceso simulado ni datos privados. La autenticación, autorización, migraciones y módulos se implementarán en las tareas del roadmap.
+La readiness no devuelve datos de conexión ni mensajes internos. El shell solo consulta health/readiness y muestra los diez módulos como pendientes; no ofrece acceso simulado ni datos privados. La autorización ya tiene servicios base de contexto y scope; las rutas y pantallas funcionales siguen en tareas posteriores.
