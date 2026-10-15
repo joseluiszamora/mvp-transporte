@@ -76,6 +76,64 @@ export interface PageResponse<T> {
   offset: number;
 }
 
+export type RoleStatus = "ACTIVE" | "INACTIVE";
+export type RoleScopeType = "ORGANIZATION" | "COMPANY" | "BRANCH";
+
+export interface PermissionCatalogItem {
+  code: string;
+  description: string;
+}
+
+export interface OrganizationRoleItem {
+  id: string;
+  code: string;
+  name: string;
+  status: RoleStatus;
+  permissions: string[];
+  assignmentCount: number;
+  createdAt: string;
+}
+
+export interface OrganizationRoleMutationResult {
+  id: string;
+  code: string;
+  name: string;
+  status: RoleStatus;
+  permissions: string[];
+}
+
+export interface RoleAssignmentItem {
+  id: string;
+  membershipId: string;
+  userEmail: string;
+  userDisplayName: string;
+  roleId: string;
+  roleCode: string;
+  roleName: string;
+  roleStatus: RoleStatus;
+  scopeType: RoleScopeType;
+  companyId: string | null;
+  companyName: string | null;
+  branchId: string | null;
+  branchName: string | null;
+  createdAt: string;
+}
+
+export interface RoleAssignmentOption {
+  id: string;
+  name: string;
+  detail: string;
+}
+
+export interface RoleAssignmentCreated {
+  id: string;
+  membershipId: string;
+  roleId: string;
+  scopeType: RoleScopeType;
+  companyId: string | null;
+  branchId: string | null;
+}
+
 export interface CreatedOrganizationResponse {
   id: string;
   name: string;

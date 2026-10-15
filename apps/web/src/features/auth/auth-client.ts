@@ -4,7 +4,15 @@ import type {
   CreatedOrganizationResponse,
   CurrentUserResponse,
   OrganizationUserItem,
+  OrganizationRoleItem,
+  OrganizationRoleMutationResult,
+  PermissionCatalogItem,
   PageResponse,
+  RoleAssignmentCreated,
+  RoleAssignmentItem,
+  RoleAssignmentOption,
+  RoleScopeType,
+  RoleStatus,
   SelectOrganizationResponse,
 } from "@mvp-transporte/contracts";
 
@@ -282,6 +290,40 @@ export async function inviteUser(email: string, displayName: string): Promise<vo
     method: "POST",
     body: JSON.stringify({ email, displayName }),
   });
+}
+
+export async function listRolePermissionCatalog(): Promise<PermissionCatalogItem[]> {
+  return apiRequest<PermissionCatalogItem[]>("/organizations/roles/permissions");
+}
+
+export async function listOrganizationRoles(limit = 20, offset = 0): Promise<PageResponse<OrganizationRoleItem>> {
+  return apiRequest<PageResponse<OrganizationRoleItem>>(`/organizations/roles?limit=${limit}&offset=${offset}`);
+}
+
+export async function createOrganizationRole(input: { name: string; permissionCodes: string[] }): Promise<OrganizationRoleMutationResult> {
+  return apiRequest<OrganizationRoleMutationResult>("/organizations/roles", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateOrganizationRole(roleId: string, input: { name?: string; status?: RoleStatus; permissionCodes?: string[] }): Promise<OrganizationRoleMutationResult> {
+  return apiRequest<OrganizationRoleMutationResult>(`/organizations/roles/${encodeURIComponent(roleId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function listRoleAssignments(limit = 20, offset = 0): Promise<PageResponse<RoleAssignmentItem>> {
+  return apiRequest<PageResponse<RoleAssignmentItem>>(`/organizations/role-assignments?limit=${limit}&offset=${offset}`);
+}
+
+export async function listRoleAssignmentOptions(kind: "memberships" | "companies" | "branches", input: { limit?: number; offset?: number; companyId?: string } = {}): Promise<PageResponse<RoleAssignmentOption>> {
+  const query = new URLSearchParams({ kind, limit: String(input.limit ?? 100), offset: String(input.offset ?? 0) });
+  if (input.companyId) query.set("companyId", input.companyId);
+  return apiRequest<PageResponse<RoleAssignmentOption>>(`/organizations/role-assignment-options?${query.toString()}`);
+}
+
+export async function createRoleAssignment(input: { membershipId: string; roleId: string; scopeType: RoleScopeType; companyId?: string; branchId?: string }): Promise<RoleAssignmentCreated> {
+  return apiRequest<RoleAssignmentCreated>("/organizations/role-assignments", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function deleteRoleAssignment(assignmentId: string): Promise<void> {
+  await apiRequest<void>(`/organizations/role-assignments/${encodeURIComponent(assignmentId)}`, { method: "DELETE" });
 }
 
 export async function createOrganization(input: {

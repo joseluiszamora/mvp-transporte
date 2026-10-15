@@ -27,6 +27,18 @@ import {
   sendAuthError,
 } from "./auth-middleware.ts";
 import { hashOpaqueToken } from "./auth-crypto.ts";
+import {
+  createOrganizationRole,
+  createRoleAssignment,
+  deleteRoleAssignment,
+  listOrganizationRoleAssignments,
+  listOrganizationRoles,
+  listPermissionCatalog,
+  listRoleAssignmentOptions,
+  parseRoleOptionKind,
+  parseRoleStatus,
+  updateOrganizationRole,
+} from "../access/role-management-service.ts";
 
 const refreshCookieName = "mvp_refresh";
 const csrfCookieName = "mvp_csrf";
@@ -153,6 +165,26 @@ function queryInteger(value: unknown, fallback: number, minimum: number, maximum
     throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
   }
   return parsed;
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
+}
+
+function bodyUuid(request: Request, key: string, optional = false): string | undefined {
+  const value = bodyRecord(request)[key];
+  if (value === undefined && optional) return undefined;
+  if (!isUuid(value)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+  return value;
+}
+
+function bodyPermissionCodes(request: Request, optional = false): string[] | undefined {
+  const value = bodyRecord(request).permissionCodes;
+  if (value === undefined && optional) return undefined;
+  if (!Array.isArray(value) || value.length > 100 || value.some((item) => typeof item !== "string" || item.length > 100)) {
+    throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+  }
+  return value as string[];
 }
 
 export function createAuthRouter(
@@ -314,6 +346,105 @@ export function createAuthRouter(
       requestId: getRequestId(response),
     });
     response.status(202).json(invitationResponse);
+  }));
+
+  router.get("/organizations/roles/permissions", authenticate, asyncRoute(async (_request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    response.status(200).json(await listPermissionCatalog(database, session));
+  }));
+
+  router.get("/organizations/roles", authenticate, asyncRoute(async (request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    response.status(200).json(await listOrganizationRoles(database, session, {
+      limit: queryInteger(request.query.limit, 20, 1, 100),
+      offset: queryInteger(request.query.offset, 0, 0, 1_000_000),
+    }));
+  }));
+
+  router.post("/organizations/roles", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    const role = await createOrganizationRole(database, session, {
+      name: bodyText(request, "name", 120) as string,
+      permissionCodes: bodyPermissionCodes(request) as string[],
+      requestId: getRequestId(response),
+    });
+    response.status(201).json(role);
+  }));
+
+  router.patch("/organizations/roles/:roleId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.roleId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    const body = bodyRecord(request);
+    const rawStatus = body.status;
+    if (rawStatus !== undefined && rawStatus !== "ACTIVE" && rawStatus !== "INACTIVE") {
+      throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    }
+    const role = await updateOrganizationRole(database, session, {
+      roleId: request.params.roleId,
+      name: bodyText(request, "name", 120, true),
+      status: rawStatus === undefined ? undefined : parseRoleStatus(rawStatus),
+      permissionCodes: bodyPermissionCodes(request, true),
+      requestId: getRequestId(response),
+    });
+    response.status(200).json(role);
+  }));
+
+  router.get("/organizations/role-assignments", authenticate, asyncRoute(async (request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    response.status(200).json(await listOrganizationRoleAssignments(database, session, {
+      limit: queryInteger(request.query.limit, 20, 1, 100),
+      offset: queryInteger(request.query.offset, 0, 0, 1_000_000),
+    }));
+  }));
+
+  router.get("/organizations/role-assignment-options", authenticate, asyncRoute(async (request, response) => {
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    const kind = parseRoleOptionKind(typeof request.query.kind === "string" ? request.query.kind : undefined);
+    const companyId = request.query.companyId;
+    if (companyId !== undefined && !isUuid(companyId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    response.status(200).json(await listRoleAssignmentOptions(database, session, {
+      kind,
+      limit: queryInteger(request.query.limit, 100, 1, 100),
+      offset: queryInteger(request.query.offset, 0, 0, 1_000_000),
+      companyId: typeof companyId === "string" ? companyId : undefined,
+    }));
+  }));
+
+  router.post("/organizations/role-assignments", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    const body = bodyRecord(request);
+    const scopeType = body.scopeType;
+    if (scopeType !== "ORGANIZATION" && scopeType !== "COMPANY" && scopeType !== "BRANCH") {
+      throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    }
+    const assignment = await createRoleAssignment(database, session, {
+      membershipId: bodyUuid(request, "membershipId") as string,
+      roleId: bodyUuid(request, "roleId") as string,
+      scopeType,
+      companyId: bodyUuid(request, "companyId", true),
+      branchId: bodyUuid(request, "branchId", true),
+      requestId: getRequestId(response),
+    });
+    response.status(201).json(assignment);
+  }));
+
+  router.delete("/organizations/role-assignments/:assignmentId", authenticate, asyncRoute(async (request, response) => {
+    requireAllowedOrigin(request, origins, false);
+    const session = getAuthenticatedSession(response);
+    if (!database || !session) throw new AuthServiceError(503, "SERVICE_NOT_READY", "Servicio temporalmente no disponible.");
+    if (!isUuid(request.params.assignmentId)) throw new AuthServiceError(400, "INVALID_REQUEST", "La solicitud no es válida.");
+    await deleteRoleAssignment(database, session, { assignmentId: request.params.assignmentId, requestId: getRequestId(response) });
+    response.status(204).end();
   }));
 
   router.post("/platform/organizations", authenticate, asyncRoute(async (request, response) => {
