@@ -46,6 +46,17 @@ enum CatalogScope {
   COMPANY
 }
 
+enum SettingScopeType {
+  INSTALLATION
+  ORGANIZATION
+  COMPANY
+  BRANCH
+}
+
+enum SettingValueType {
+  STRING
+}
+
 enum AccountTokenPurpose {
   ACTIVATION
   PASSWORD_RECOVERY
@@ -81,6 +92,9 @@ model Organization {
   auditEvents AuditEvent[]
   emailOutbox EmailOutbox[]
   catalogs     Catalog[]
+  settings     Setting[]
+  businessHours BusinessHour[]
+  numberSequences NumberSequence[]
 
   @@map("organizations")
 }
@@ -101,6 +115,9 @@ model Company {
   assignments    RoleAssignment[] @relation("RoleAssignmentCompany")
   auditEvents    AuditEvent[] @relation("AuditEventCompany")
   catalogs       Catalog[]
+  settings       Setting[]
+  businessHours  BusinessHour[]
+  numberSequences NumberSequence[]
 
   @@unique([id, organizationId], map: "companies_id_organization_id_key")
   @@index([organizationId, status], map: "companies_organization_status_idx")
@@ -121,6 +138,9 @@ model Branch {
   company        Company     @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
   assignments    RoleAssignment[] @relation("RoleAssignmentBranch")
   auditEvents    AuditEvent[] @relation("AuditEventBranch")
+  settings       Setting[]
+  businessHours  BusinessHour[]
+  numberSequences NumberSequence[]
 
   @@unique([id, companyId, organizationId], map: "branches_id_company_organization_key")
   @@unique([companyId, code], map: "branches_company_code_key")
@@ -141,6 +161,9 @@ model User {
   sessions       Session[]
   accountTokens  AccountToken[]
   auditEvents    AuditEvent[] @relation("AuditEventActor")
+  settingsUpdated Setting[] @relation("SettingUpdatedBy")
+  businessHoursUpdated BusinessHour[] @relation("BusinessHourUpdatedBy")
+  numberSequencesUpdated NumberSequence[] @relation("NumberSequenceUpdatedBy")
 
   @@map("users")
 }
@@ -396,4 +419,77 @@ model CatalogItem {
   @@unique([catalogId, code], map: "catalog_items_catalog_code_key")
   @@index([catalogId, status, name], map: "catalog_items_catalog_status_name_idx")
   @@map("catalog_items")
+}
+
+model Setting {
+  id             String           @id @default(uuid()) @db.Uuid
+  scopeType      SettingScopeType @map("scope_type")
+  organizationId String?          @map("organization_id") @db.Uuid
+  companyId      String?          @map("company_id") @db.Uuid
+  branchId       String?          @map("branch_id") @db.Uuid
+  key            String           @db.VarChar(80)
+  valueType      SettingValueType @default(STRING) @map("value_type")
+  value          Json             @db.JsonB
+  updatedBy      String?          @map("updated_by") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company?         @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  branch         Branch?          @relation(fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
+  updater        User?            @relation("SettingUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@unique([key], where: raw("\"scope_type\" = 'INSTALLATION'"), map: "settings_installation_key_key")
+  @@unique([organizationId, key], where: raw("\"scope_type\" = 'ORGANIZATION'"), map: "settings_organization_key_key")
+  @@unique([companyId, key], where: raw("\"scope_type\" = 'COMPANY'"), map: "settings_company_key_key")
+  @@unique([branchId, key], where: raw("\"scope_type\" = 'BRANCH'"), map: "settings_branch_key_key")
+  @@index([organizationId, scopeType, key], map: "settings_organization_scope_key_idx")
+  @@map("settings")
+}
+
+model BusinessHour {
+  id             String           @id @default(uuid()) @db.Uuid
+  scopeType      SettingScopeType @map("scope_type")
+  organizationId String           @map("organization_id") @db.Uuid
+  companyId      String           @map("company_id") @db.Uuid
+  branchId       String?          @map("branch_id") @db.Uuid
+  weekday        Int              @db.SmallInt
+  intervals      Json             @db.JsonB
+  updatedBy      String?          @map("updated_by") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company          @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  branch         Branch?          @relation(fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
+  updater        User?            @relation("BusinessHourUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, weekday], where: raw("\"scope_type\" = 'COMPANY' AND \"branch_id\" IS NULL"), map: "business_hours_company_weekday_key")
+  @@unique([branchId, weekday], where: raw("\"scope_type\" = 'BRANCH'"), map: "business_hours_branch_weekday_key")
+  @@index([organizationId, companyId, branchId, weekday], map: "business_hours_scope_weekday_idx")
+  @@map("business_hours")
+}
+
+model NumberSequence {
+  id             String    @id @default(uuid()) @db.Uuid
+  scopeType      ScopeType @map("scope_type")
+  organizationId String    @map("organization_id") @db.Uuid
+  companyId      String?   @map("company_id") @db.Uuid
+  branchId       String?   @map("branch_id") @db.Uuid
+  documentType   String    @map("document_type") @db.VarChar(60)
+  period         String    @db.VarChar(16)
+  prefix         String    @default("") @db.VarChar(24)
+  padding        Int       @default(0) @db.SmallInt
+  nextValue      BigInt    @default(1) @map("next_value")
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company        Company?  @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  branch         Branch?   @relation(fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
+  updater        User?     @relation("NumberSequenceUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, documentType, period], where: raw("\"scope_type\" = 'ORGANIZATION'"), map: "number_sequences_organization_key_key")
+  @@unique([companyId, documentType, period], where: raw("\"scope_type\" = 'COMPANY'"), map: "number_sequences_company_key_key")
+  @@unique([branchId, documentType, period], where: raw("\"scope_type\" = 'BRANCH'"), map: "number_sequences_branch_key_key")
+  @@index([organizationId, companyId, branchId, documentType], map: "number_sequences_scope_document_idx")
+  @@map("number_sequences")
 }

@@ -800,6 +800,112 @@ async function verifyRoleManagement(database, createApp) {
     const tenantBLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: tenantBAdminEmail, password } });
     assert.equal(tenantBLogin.response.status, 200);
     const tenantBToken = tenantBLogin.body.accessToken;
+    const settingScopeOptions = await apiRequest(baseUrl, "/settings/scope-options?limit=100", { accessToken: adminToken });
+    assert.equal(settingScopeOptions.response.status, 200);
+    assert.ok(settingScopeOptions.body.companies.some((item) => item.id === companyId));
+    assert.ok(settingScopeOptions.body.companies.some((item) => item.id === otherCompanyId));
+    const companyIdentityA = await apiRequest(baseUrl, "/settings", {
+      method: "PUT", accessToken: adminToken,
+      body: { scopeType: "COMPANY", companyId, key: "identity.name", value: `Empresa A ${marker.slice(0, 8)}` },
+    });
+    const companyIdentityB = await apiRequest(baseUrl, "/settings", {
+      method: "PUT", accessToken: adminToken,
+      body: { scopeType: "COMPANY", companyId: otherCompanyId, key: "identity.name", value: `Empresa B ${marker.slice(0, 8)}` },
+    });
+    assert.equal(companyIdentityA.response.status, 200);
+    assert.equal(companyIdentityB.response.status, 200, "La configuración de identidad se separa por empresa.");
+    const effectiveCompanyA = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}`, { accessToken: adminToken });
+    const effectiveCompanyB = await apiRequest(baseUrl, `/settings/effective?companyId=${otherCompanyId}`, { accessToken: adminToken });
+    const effectiveIdentityA = effectiveCompanyA.body.items.find((item) => item.key === "identity.name");
+    const effectiveIdentityB = effectiveCompanyB.body.items.find((item) => item.key === "identity.name");
+    assert.equal(effectiveIdentityA.value, companyIdentityA.body.item.value);
+    assert.notEqual(effectiveIdentityA.value, effectiveIdentityB.value, "Dos empresas deben resolver identidades independientes.");
+    assert.equal(effectiveIdentityA.sourceScopeType, "COMPANY");
+    const organizationLocale = await apiRequest(baseUrl, "/settings", {
+      method: "PUT", accessToken: adminToken, body: { scopeType: "ORGANIZATION", key: "locale", value: "es" },
+    });
+    assert.equal(organizationLocale.response.status, 200);
+    assert.equal(effectiveCompanyA.body.target.scopeType, "COMPANY");
+    const refreshedEffectiveCompanyA = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}`, { accessToken: adminToken });
+    assert.equal(refreshedEffectiveCompanyA.body.items.find((item) => item.key === "locale").sourceScopeType, "ORGANIZATION", "La configuración efectiva debe heredar de organización a empresa.");
+    const invalidCurrency = await apiRequest(baseUrl, "/settings", {
+      method: "PUT", accessToken: adminToken, body: { scopeType: "COMPANY", companyId, key: "currency", value: "USD" },
+    });
+    assert.equal(invalidCurrency.response.status, 400, "Los valores fuera de la lista permitida se rechazan.");
+    const invalidSettingKey = await apiRequest(baseUrl, "/settings", {
+      method: "PUT", accessToken: adminToken, body: { scopeType: "COMPANY", companyId, key: "smtp.password", value: "secret" },
+    });
+    assert.equal(invalidSettingKey.response.status, 400, "No se acepta una clave de configuración secreta o desconocida.");
+    const tenantCannotReadInstallation = await apiRequest(baseUrl, "/settings/installation", { accessToken: adminToken });
+    assert.equal(tenantCannotReadInstallation.response.status, 403, "SMTP y configuración de instalación están fuera del acceso del tenant.");
+    const foreignCompanySetting = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}`, { accessToken: tenantBToken });
+    assert.equal(foreignCompanySetting.response.status, 404, "La configuración de una empresa ajena no debe poder enumerarse.");
+    const tenantBCompany = await database.query("SELECT id FROM companies WHERE organization_id = (SELECT id FROM organizations WHERE id <> $1::uuid ORDER BY name LIMIT 1) ORDER BY id LIMIT 1", [organizationId]);
+    assert.ok(tenantBCompany.rows[0]);
+    const tenantBIdentity = await apiRequest(baseUrl, "/settings", {
+      method: "PUT", accessToken: tenantBToken,
+      body: { scopeType: "COMPANY", companyId: tenantBCompany.rows[0].id, key: "identity.name", value: `Empresa B tenant ${marker.slice(0, 8)}` },
+    });
+    assert.equal(tenantBIdentity.response.status, 200, "Otro tenant puede guardar su propia configuración.");
+
+    const companyHours = Array.from({ length: 7 }, (_, index) => ({
+      weekday: index + 1,
+      intervals: index === 0 ? [{ start: "09:00", end: "12:00" }, { start: "13:00", end: "17:00" }] : [],
+    }));
+    const savedCompanyHours = await apiRequest(baseUrl, "/settings/business-hours", {
+      method: "PUT", accessToken: adminToken, body: { companyId, days: companyHours },
+    });
+    assert.equal(savedCompanyHours.response.status, 200);
+    const inheritedBranchHours = await apiRequest(baseUrl, `/settings/business-hours?companyId=${companyId}&branchId=${branchId}`, { accessToken: adminToken });
+    assert.equal(inheritedBranchHours.response.status, 200);
+    assert.equal(inheritedBranchHours.body.items[0].sourceScopeType, "COMPANY", "El horario de sucursal hereda inicialmente el de empresa.");
+    const overlappingHours = structuredClone(companyHours);
+    overlappingHours[0].intervals[1] = { start: "11:30", end: "15:00" };
+    const rejectedHours = await apiRequest(baseUrl, "/settings/business-hours", {
+      method: "PUT", accessToken: adminToken, body: { companyId, days: overlappingHours },
+    });
+    assert.equal(rejectedHours.response.status, 400, "Los intervalos solapados se rechazan.");
+    const branchHours = Array.from({ length: 7 }, (_, index) => ({
+      weekday: index + 1,
+      intervals: index === 0 ? [{ start: "10:00", end: "16:00" }] : [],
+    }));
+    const savedBranchHours = await apiRequest(baseUrl, "/settings/business-hours", {
+      method: "PUT", accessToken: adminToken, body: { companyId, branchId, days: branchHours },
+    });
+    assert.equal(savedBranchHours.response.status, 200);
+    const branchHoursAfter = await apiRequest(baseUrl, `/settings/business-hours?companyId=${companyId}&branchId=${branchId}`, { accessToken: adminToken });
+    assert.equal(branchHoursAfter.body.items[0].sourceScopeType, "BRANCH");
+    assert.deepEqual(branchHoursAfter.body.items[0].intervals, [{ start: "10:00", end: "16:00" }]);
+    const companyHoursAfter = await apiRequest(baseUrl, `/settings/business-hours?companyId=${companyId}`, { accessToken: adminToken });
+    assert.deepEqual(companyHoursAfter.body.items[0].intervals, companyHours[0].intervals, "El override de sucursal no debe modificar a la empresa.");
+
+    const sequence = await apiRequest(baseUrl, "/settings/number-sequences", {
+      method: "POST", accessToken: adminToken,
+      body: { companyId, documentType: "invoice", period: "2026-10", prefix: "FAC-", padding: 6 },
+    });
+    assert.equal(sequence.response.status, 201);
+    assert.equal(sequence.body.documentType, "INVOICE");
+    const invalidSequencePeriod = await apiRequest(baseUrl, "/settings/number-sequences", {
+      method: "POST", accessToken: adminToken,
+      body: { companyId, documentType: "INVOICE", period: "2026-13", prefix: "FAC-", padding: 6 },
+    });
+    assert.equal(invalidSequencePeriod.response.status, 400);
+    const independentSequence = await apiRequest(baseUrl, "/settings/number-sequences", {
+      method: "POST", accessToken: adminToken,
+      body: { companyId: otherCompanyId, documentType: "INVOICE", period: "2026-10", prefix: "OTR-", padding: 4 },
+    });
+    assert.equal(independentSequence.response.status, 201, "El mismo documento y período se permiten en otra empresa.");
+    const concurrentNumbers = await Promise.all(Array.from({ length: 12 }, () => apiRequest(baseUrl, `/settings/number-sequences/${sequence.body.id}/next`, { method: "POST", accessToken: adminToken, body: {} })));
+    assert.ok(concurrentNumbers.every((result) => result.response.status === 200), "La numeración concurrente debe completar todas las emisiones.");
+    const issuedNumbers = concurrentNumbers.map((result) => result.body.number);
+    assert.equal(new Set(issuedNumbers).size, 12, "La emisión concurrente no debe duplicar números.");
+    assert.ok(issuedNumbers.every((number) => /^INVOICE-FAC-2026-10-\d{6}$/u.test(number)));
+    const sequenceAfterIssue = await apiRequest(baseUrl, `/settings/number-sequences?companyId=${companyId}`, { accessToken: adminToken });
+    assert.equal(sequenceAfterIssue.body.items.find((item) => item.id === sequence.body.id).nextValue, "13");
+    const immutableSequence = await apiRequest(baseUrl, `/settings/number-sequences/${sequence.body.id}`, {
+      method: "PATCH", accessToken: adminToken, body: { prefix: "CAMBIADO-" },
+    });
+    assert.equal(immutableSequence.response.status, 409, "No se debe modificar el formato tras la primera emisión.");
     const tenantBCatalog = await apiRequest(baseUrl, "/catalogs", {
       method: "POST", accessToken: tenantBToken,
       body: { code: sharedCatalogCode, name: "Clasificación del tenant B", scope: "ORGANIZATION" },
@@ -967,6 +1073,25 @@ async function verifyRoleManagement(database, createApp) {
     const scopedBranches = await apiRequest(baseUrl, `/organizations/branches?companyId=${companyId}&limit=100`, { accessToken: recipientToken });
     assert.equal(scopedBranches.response.status, 200);
     assert.deepEqual(scopedBranches.body.items.map((item) => item.id), [branchId], "Una autorización de sucursal solo lista esa sucursal.");
+    const settingsBeforeGrant = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}`, { accessToken: recipientToken });
+    assert.equal(settingsBeforeGrant.response.status, 403, "Una cuenta sin settings.read no consulta configuración.");
+    const branchSettingsRole = await createRole(`Gestión de configuración de sucursal ${marker}`, ["settings.read", "settings.update"]);
+    const branchSettingsAssignment = await assign({ membershipId: recipientMembershipId, roleId: branchSettingsRole.id, scopeType: "BRANCH", companyId, branchId: otherBranchId });
+    assert.equal(branchSettingsAssignment.response.status, 201);
+    const settingsScopeOptions = await apiRequest(baseUrl, "/settings/scope-options?limit=100", { accessToken: recipientToken });
+    assert.equal(settingsScopeOptions.response.status, 200);
+    const scopedSettingCompany = settingsScopeOptions.body.companies.find((item) => item.id === companyId);
+    assert.ok(scopedSettingCompany);
+    assert.equal(scopedSettingCompany.canRead, false, "El permiso de sucursal no se amplía a la empresa.");
+    assert.deepEqual(scopedSettingCompany.branches.map((item) => item.id), [otherBranchId], "Las opciones de configuración incluyen solo sucursales autorizadas.");
+    const settingsAtCompany = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}`, { accessToken: recipientToken });
+    assert.equal(settingsAtCompany.response.status, 403, "Una autorización de configuración de sucursal no habilita el ámbito empresa.");
+    const settingsAtAllowedBranch = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}&branchId=${otherBranchId}`, { accessToken: recipientToken });
+    assert.equal(settingsAtAllowedBranch.response.status, 200);
+    const settingsAtOtherBranch = await apiRequest(baseUrl, `/settings/effective?companyId=${companyId}&branchId=${branchId}`, { accessToken: recipientToken });
+    assert.equal(settingsAtOtherBranch.response.status, 403, "La configuración de otra sucursal sigue denegada.");
+    const settingsAtOtherCompany = await apiRequest(baseUrl, `/settings/effective?companyId=${otherCompanyId}`, { accessToken: recipientToken });
+    assert.equal(settingsAtOtherCompany.response.status, 403, "El permiso de sucursal no habilita otra empresa.");
 
     const removeOrganizationCatalogRead = await apiRequest(baseUrl, `/organizations/roles/${organizationReader.id}`, {
       method: "PATCH", accessToken: adminToken, body: { status: "INACTIVE" },
@@ -1069,11 +1194,18 @@ async function verifyRoleManagement(database, createApp) {
          'BRANCH_CREATED', 'BRANCH_UPDATED', 'BRANCH_ACTIVATED', 'BRANCH_DEACTIVATED',
          'USER_MEMBERSHIP_SUSPENDED', 'USER_MEMBERSHIP_REACTIVATED',
          'CATALOG_CREATED', 'CATALOG_UPDATED', 'CATALOG_ACTIVATED', 'CATALOG_DEACTIVATED',
-         'CATALOG_ITEM_CREATED', 'CATALOG_ITEM_UPDATED', 'CATALOG_ITEM_ACTIVATED', 'CATALOG_ITEM_DEACTIVATED')`,
+         'CATALOG_ITEM_CREATED', 'CATALOG_ITEM_UPDATED', 'CATALOG_ITEM_ACTIVATED', 'CATALOG_ITEM_DEACTIVATED',
+         'SETTING_UPDATED', 'SETTING_OVERRIDE_REMOVED', 'BUSINESS_HOURS_REPLACED',
+         'NUMBER_SEQUENCE_CREATED', 'NUMBER_SEQUENCE_UPDATED', 'NUMBER_SEQUENCE_ISSUED')`,
       [organizationId],
     );
-    assert.ok(auditActions.rows[0].total >= 8, "Las mutaciones de roles deben quedar auditadas.");
-    process.stdout.write("TASK-005/006/007 integration: aislamiento tenant/empresa/sucursal, catálogos protegidos, scope y soft-delete, auditoría, membership status y admin final correctos.\n");
+    assert.ok(auditActions.rows[0].total >= 25, "Las mutaciones de roles, configuración, horarios y numeraciones deben quedar auditadas.");
+    const sequenceAudit = await database.query(
+      "SELECT count(*)::int AS total FROM audit_events WHERE organization_id = $1::uuid AND action = 'NUMBER_SEQUENCE_ISSUED'",
+      [organizationId],
+    );
+    assert.equal(sequenceAudit.rows[0].total, 12, "Cada número emitido debe quedar auditado en su transacción.");
+    process.stdout.write("TASK-005/006/007/008 integration: aislamiento, configuración efectiva, horarios, numeración atómica, auditoría, roles y membresías correctos.\n");
   } finally {
     await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   }
@@ -1352,6 +1484,18 @@ async function verifyAuthentication(database, smtpPort, mailpitHttpPort, createA
       body: { email: platformEmail, password: "Platform Administrator Password 2026!" },
     });
     assert.equal(platformLogin.response.status, 200);
+    const platformSettings = await apiRequest(baseUrl, "/settings/installation", { accessToken: platformLogin.body.accessToken });
+    assert.equal(platformSettings.response.status, 200);
+    assert.deepEqual(platformSettings.body.items.map((item) => item.key).sort(), ["currency", "locale", "timeZone"]);
+    assert.ok(!JSON.stringify(platformSettings.body).toLowerCase().includes("smtp"), "La configuración de instalación no serializa secretos SMTP.");
+    const installationSettingSaved = await apiRequest(baseUrl, "/settings/installation", {
+      method: "PUT", accessToken: platformLogin.body.accessToken, body: { key: "locale", value: "es" },
+    });
+    assert.equal(installationSettingSaved.response.status, 200, "Solo el administrador de plataforma puede modificar defaults de instalación.");
+    const installationSecretRejected = await apiRequest(baseUrl, "/settings/installation", {
+      method: "PUT", accessToken: platformLogin.body.accessToken, body: { key: "smtp.password", value: "not-a-secret" },
+    });
+    assert.equal(installationSecretRejected.response.status, 400, "La allowlist impide guardar credenciales SMTP en settings.");
     const createdOrganization = await apiRequest(baseUrl, "/platform/organizations", {
       method: "POST",
       accessToken: platformLogin.body.accessToken,

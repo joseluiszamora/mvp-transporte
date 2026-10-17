@@ -9,6 +9,7 @@ import { openApiDocument } from "./openapi.ts";
 import { createAuthRouter } from "./modules/auth/auth-router.ts";
 import type { AuthSettings } from "./modules/auth/auth-service.ts";
 import { createCatalogRouter } from "./modules/catalogs/catalog-router.ts";
+import { createSettingsRouter } from "./modules/settings/settings-router.ts";
 
 export interface AppDependencies {
   allowedOrigins?: readonly string[];
@@ -65,6 +66,7 @@ export function createApp(dependencies: AppDependencies = {}): Express {
 
   app.use("/api/v1", createAuthRouter(dependencies.database, authSettings, allowedOrigins));
   app.use("/api/v1/catalogs", createCatalogRouter(dependencies.database, authSettings, allowedOrigins));
+  app.use("/api/v1/settings", createSettingsRouter(dependencies.database, authSettings, allowedOrigins));
 
   app.use((_request, response) => {
     response.status(404).json({
