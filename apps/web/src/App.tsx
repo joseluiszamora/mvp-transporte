@@ -41,6 +41,26 @@ import { CatalogsPage } from "./features/catalogs/CatalogsPage";
 
 const drawerWidth = 272;
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } });
+const themeModeStorageKey = "mvp-transporte.theme-mode";
+type ThemeMode = "light" | "dark";
+
+function readThemeMode(): ThemeMode {
+  try {
+    const savedMode = window.localStorage.getItem(themeModeStorageKey);
+    if (savedMode === "light" || savedMode === "dark") return savedMode;
+  } catch {
+    // Keep the light default when browser storage is unavailable.
+  }
+  return "light";
+}
+
+function saveThemeMode(mode: ThemeMode): void {
+  try {
+    window.localStorage.setItem(themeModeStorageKey, mode);
+  } catch {
+    // Theme changes still work for the current page when storage is unavailable.
+  }
+}
 
 const modules = [
   { code: "ADM-01", name: "Empresas y sucursales" },
@@ -196,11 +216,24 @@ function ApplicationRoutes({ mode, onToggleMode }: { mode: "light" | "dark"; onT
 }
 
 export function App(): React.JSX.Element {
-  const [mode, setMode] = useState<"light" | "dark">("light");
+  const [mode, setMode] = useState<ThemeMode>(readThemeMode);
+  const toggleMode = (): void => {
+    const nextMode = mode === "light" ? "dark" : "light";
+    saveThemeMode(nextMode);
+    setMode(nextMode);
+  };
   const theme = useMemo(() => createTheme({
     palette: { mode, primary: { main: mode === "light" ? "#0f766e" : "#5eead4" }, background: { default: mode === "light" ? "#f5f8f7" : "#101716", paper: mode === "light" ? "#ffffff" : "#18211f" } },
     shape: { borderRadius: 12 },
     typography: { fontFamily: '"Inter", "Segoe UI", "Roboto", sans-serif' },
+    components: {
+      MuiButton: {
+        styleOverrides: {
+          root: { whiteSpace: "normal", overflowWrap: "anywhere", lineHeight: 1.3 },
+        },
+      },
+    },
   }), [mode]);
-  return <ThemeProvider theme={theme}><CssBaseline /><QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><ApplicationRoutes mode={mode} onToggleMode={() => setMode((current) => current === "light" ? "dark" : "light")} /></BrowserRouter></AuthProvider></QueryClientProvider></ThemeProvider>;
+  return <ThemeProvider theme={theme}><CssBaseline /><QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><ApplicationRoutes mode={mode} onToggleMode={toggleMode} /></BrowserRouter></AuthProvider></QueryClientProvider></ThemeProvider>;
 }
+
