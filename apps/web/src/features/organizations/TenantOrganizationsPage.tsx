@@ -38,7 +38,7 @@ const emptyCompany: CompanyInput = { legalName: "", tradeName: "", nit: "", cont
 const emptyBranch: BranchInput = { code: "", name: "", contact: "", address: "" };
 
 export function TenantOrganizationsPage(): React.JSX.Element {
-  const { user } = useAuth();
+  const { user, reloadUser } = useAuth();
   const queryClient = useQueryClient();
   const organizationId = user?.selectedOrganizationId;
   const canReadCompanies = Boolean(user?.permissions.includes("companies.read"));
@@ -112,7 +112,16 @@ export function TenantOrganizationsPage(): React.JSX.Element {
   const deactivateBranch = useMutation({ mutationFn: (id: string) => deactivateTenantBranch(id), onSuccess: async () => { setSelectedBranchId(""); setBranchForm(emptyBranch); await invalidateBranches(); } });
   const reactivateBranch = useMutation({ mutationFn: (id: string) => updateTenantBranch(id, { status: "ACTIVE" }), onSuccess: invalidateBranches });
 
-  if (!canReadCompanies && !canReadBranches) return <Alert severity="warning">Tu cuenta no tiene permiso para consultar empresas ni sucursales.</Alert>;
+  if (!user?.selectedOrganizationId) {
+    const message = user?.organizations.length
+      ? "Tienes membresías activas. Selecciona una organización en el selector superior para administrar sus empresas y sucursales."
+      : user?.platformAdmin
+        ? "La cuenta de plataforma no obtiene acceso automático a las empresas de los clientes. Usa una cuenta con membresía en esa organización."
+        : "No hay una membresía activa seleccionada. Si una organización se acaba de reactivar, actualiza tus membresías para volver a seleccionarla.";
+    const canRefreshMemberships = Boolean(user?.organizations.length || !user?.platformAdmin);
+    return <Alert action={canRefreshMemberships ? <Button color="inherit" onClick={() => { void reloadUser(); }} size="small">Actualizar membresías</Button> : null} severity="info">{message}</Alert>;
+  }
+  if (!canReadCompanies && !canReadBranches) return <Alert severity="warning">Tu cuenta no tiene permiso para consultar empresas ni sucursales en la organización seleccionada.</Alert>;
 
   const updateNewCompanyField = (field: keyof CompanyInput, value: string): void => setNewCompanyForm((current) => ({ ...current, [field]: value }));
   const updateEditCompanyField = (field: keyof CompanyInput, value: string): void => setEditCompanyForm((current) => ({ ...current, [field]: value }));

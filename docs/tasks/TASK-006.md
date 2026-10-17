@@ -21,4 +21,6 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - No requiere migración: el esquema de TASK-002 ya contiene entidades, estados y restricciones necesarias.
 - Validación local: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` y `npm run test:integration` pasaron. La integración usó PostgreSQL/Mailpit desechables y probó aislamiento, alcance, unicidad, estados, auditoría y protección del último administrador.
 - PR #19 integrado con merge commit `f2bf803746afd9158fdb5e3095512f576d94aeb1`; CI run #14 aprobó lint, typecheck, tests unitarios, build e integración PostgreSQL desechable.
+- Al reactivar una organización, la membresía activa puede volver a estar disponible aunque la sesión haya perdido la selección durante la suspensión. ADM-01 y el resumen ahora distinguen entre una membresía activa sin organización seleccionada y una cuenta sin membresías, y permiten actualizar la lista de membresías desde la interfaz.
+- Validación local de este ajuste: `npm run lint`, `npm run typecheck` y `npm run build` pasaron; Vite conserva la advertencia informativa de bundle mayor a 500 kB.
 - Pendiente: aceptación funcional del propietario. No se desplegó producción ni se migró una base persistente.
