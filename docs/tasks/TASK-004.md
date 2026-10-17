@@ -1,5 +1,5 @@
 # TASK-004 — Autenticación y alta administrativa
-Estado: en revisión técnica; aceptación funcional pendiente del propietario. Dependencias técnicas: TASK-003 integrado; issue GitHub [#4](https://github.com/joseluiszamora/mvp-transporte/issues/4) abierta.
+Estado: aceptación funcional confirmada por el propietario; issue GitHub [#4](https://github.com/joseluiszamora/mvp-transporte/issues/4) cerrada como completada. Dependencias técnicas: TASK-003 integrado. Las correcciones visuales posteriores se publican en esta continuación técnica; la aceptación funcional de la tarea ya fue confirmada por el propietario.
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -24,4 +24,7 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run build`: correcto; Vite mantiene advertencia informativa de chunk mayor a 500 kB.
 - `npm run test:integration`: correcto; migró TASK-002/003/004 y sembró únicamente PostgreSQL desechable, comprobó concurrencia, rotación/replay, aislamiento y permisos tenant, invitaciones/activación, anti-enumeración, recuperación/revocación y SMTP real a Mailpit; Compose eliminó los contenedores al final.
 - `npm audit --audit-level=high`: correcto, 0 vulnerabilidades.
-- No se aplicaron migraciones a la base local persistente ni se desplegó producción. Falta prueba manual de UI/varias pestañas y aceptación funcional del propietario; la issue permanece abierta.
+- No se aplicaron migraciones a la base local persistente ni se desplegó producción.
+- Aceptación funcional: el propietario confirmó que la interfaz funciona y cerró TASK-004; GitHub registra la Issue #4 como `closed` / `completed`.
+- En esta continuación técnica se publican los ajustes visuales solicitados por el propietario: persistencia del modo claro/oscuro en `localStorage` y ajuste de etiquetas al ancho de los botones. `npm run lint`, `npm run typecheck --workspace @mvp-transporte/web` y `npm run build --workspace @mvp-transporte/web` pasaron el 16/10/2026; Vite muestra la advertencia informativa existente de chunk mayor a 500 kB.
+
