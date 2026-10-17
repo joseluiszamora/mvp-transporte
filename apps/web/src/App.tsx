@@ -118,12 +118,15 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }): React.J
 }
 
 function Dashboard(): React.JSX.Element {
-  const { user } = useAuth();
+  const { user, reloadUser } = useAuth();
   const selectedOrganization = user?.organizations.find((item) => item.id === user.selectedOrganizationId);
+  const membershipNotice = user?.organizations.length
+    ? "Tienes membresías activas. Selecciona una organización en el selector superior para continuar."
+    : "No hay una membresía activa seleccionada. Si una organización se acaba de reactivar, actualiza tus membresías para volver a seleccionarla.";
   return (
     <Stack spacing={3}>
       <Box><Typography color="text.secondary" variant="overline">INICIO</Typography><Typography component="h1" sx={{ fontWeight: 700 }} variant="h4">Resumen</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Bienvenido, {user?.displayName}.</Typography></Box>
-      {!selectedOrganization && !user?.platformAdmin && <Alert severity="info">Tu cuenta no tiene una membresía activa seleccionada. Contacta a la administración de tu organización.</Alert>}
+      {!selectedOrganization && !user?.platformAdmin && <Alert action={<Button color="inherit" onClick={() => { void reloadUser(); }} size="small">Actualizar membresías</Button>} severity="info">{membershipNotice}</Alert>}
       {selectedOrganization && <Card variant="outlined"><CardContent><Typography color="text.secondary" variant="overline">ORGANIZACIÓN ACTIVA</Typography><Typography variant="h6">{selectedOrganization.name}</Typography></CardContent></Card>}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
         <Paper component="section" variant="outlined" sx={{ flex: "1 1 220px", p: 2.5 }}><Typography color="text.secondary" variant="overline">PLATAFORMA</Typography><Typography sx={{ fontWeight: 700, mt: 0.5 }} variant="h5">Base administrativa</Typography><Typography color="text.secondary" variant="body2">Instalación independiente para organizaciones y empresas.</Typography></Paper>
