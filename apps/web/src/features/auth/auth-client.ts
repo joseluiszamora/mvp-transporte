@@ -24,6 +24,13 @@ import type {
   RoleStatus,
   RecordStatus,
   SelectOrganizationResponse,
+  BusinessHourDay,
+  EffectiveSettingsResponse,
+  NumberSequence,
+  SettingKey,
+  SettingItem,
+  SettingScopeOptions,
+  SettingScopeType,
 } from "@mvp-transporte/contracts";
 
 const csrfCookieName = "mvp_csrf";
@@ -399,6 +406,66 @@ export async function updateCatalogItem(catalogId: string, itemId: string, input
 
 export async function deactivateCatalogItem(catalogId: string, itemId: string): Promise<void> {
   await apiRequest<void>(`/catalogs/${encodeURIComponent(catalogId)}/items/${encodeURIComponent(itemId)}`, { method: "DELETE" });
+}
+
+function settingScopeQuery(input: { companyId?: string; branchId?: string } = {}): string {
+  const query = new URLSearchParams();
+  if (input.companyId) query.set("companyId", input.companyId);
+  if (input.branchId) query.set("branchId", input.branchId);
+  return query.toString();
+}
+
+export async function listSettingScopeOptions(limit = 100, offset = 0): Promise<SettingScopeOptions> {
+  return apiRequest<SettingScopeOptions>(`/settings/scope-options?limit=${limit}&offset=${offset}`);
+}
+
+export async function listSettingOverrides(input: { companyId?: string; branchId?: string } = {}): Promise<PageResponse<SettingItem>> {
+  return apiRequest<PageResponse<SettingItem>>(`/settings?limit=100&offset=0&${settingScopeQuery(input)}`);
+}
+
+export async function getEffectiveSettings(input: { companyId?: string; branchId?: string } = {}): Promise<EffectiveSettingsResponse> {
+  return apiRequest<EffectiveSettingsResponse>(`/settings/effective?${settingScopeQuery(input)}`);
+}
+
+export async function getInstallationSettings(): Promise<{ items: SettingItem[] }> {
+  return apiRequest<{ items: SettingItem[] }>("/settings/installation");
+}
+
+export async function updateSetting(input: { scopeType: Exclude<SettingScopeType, "INSTALLATION">; companyId?: string; branchId?: string; key: SettingKey; value: string | null }): Promise<{ item: SettingItem | null; deleted: boolean }> {
+  return apiRequest<{ item: SettingItem | null; deleted: boolean }>("/settings", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export async function updateInstallationSetting(input: { key: SettingKey; value: string | null }): Promise<{ item: SettingItem | null; deleted: boolean }> {
+  return apiRequest<{ item: SettingItem | null; deleted: boolean }>("/settings/installation", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export async function getBusinessHours(input: { companyId: string; branchId?: string }): Promise<{ items: BusinessHourDay[] }> {
+  const query = settingScopeQuery(input);
+  return apiRequest<{ items: BusinessHourDay[] }>(`/settings/business-hours?${query}`);
+}
+
+export async function replaceBusinessHours(input: { companyId: string; branchId?: string; days: BusinessHourDay[] }): Promise<{ items: BusinessHourDay[] }> {
+  return apiRequest<{ items: BusinessHourDay[] }>("/settings/business-hours", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export async function listNumberSequences(input: { companyId?: string; branchId?: string; limit?: number; offset?: number; search?: string } = {}): Promise<PageResponse<NumberSequence>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.companyId) query.set("companyId", input.companyId);
+  if (input.branchId) query.set("branchId", input.branchId);
+  if (input.search) query.set("search", input.search);
+  return apiRequest<PageResponse<NumberSequence>>(`/settings/number-sequences?${query.toString()}`);
+}
+
+export async function createNumberSequence(input: { companyId?: string; branchId?: string; documentType: string; period: string; prefix: string; padding: number }): Promise<NumberSequence> {
+  return apiRequest<NumberSequence>("/settings/number-sequences", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateNumberSequence(sequenceId: string, input: { prefix: string; padding: number }): Promise<NumberSequence> {
+  return apiRequest<NumberSequence>(`/settings/number-sequences/${encodeURIComponent(sequenceId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function issueSequenceNumber(sequenceId: string): Promise<{ sequenceId: string; documentType: string; period: string; number: string }> {
+  return apiRequest<{ sequenceId: string; documentType: string; period: string; number: string }>(`/settings/number-sequences/${encodeURIComponent(sequenceId)}/next`, { method: "POST", body: "{}" });
 }
 
 export async function listRolePermissionCatalog(): Promise<PermissionCatalogItem[]> {

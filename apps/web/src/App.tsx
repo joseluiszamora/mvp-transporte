@@ -38,6 +38,7 @@ import { TenantOrganizationsPage } from "./features/organizations/TenantOrganiza
 import { UsersPage } from "./features/users/UsersPage";
 import { RolesPage } from "./features/roles/RolesPage";
 import { CatalogsPage } from "./features/catalogs/CatalogsPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
 
 const drawerWidth = 272;
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } });
@@ -96,9 +97,11 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }): React.J
     { label: "Resumen", path: "/" },
     ...(user?.permissions.includes("users.read") ? [{ label: "ADM-02 · Usuarios", path: "/modules/ADM-02" }] : []),
     ...(user?.permissions.includes("roles.read") ? [{ label: "ADM-04 · Roles y permisos", path: "/modules/ADM-04" }] : []),
+    ...(user?.permissions.includes("settings.read") ? [{ label: "ADM-06 · Configuración", path: "/modules/ADM-06" }] : []),
     ...(user?.platformAdmin ? [{ label: "Organizaciones de plataforma", path: "/platform/organizations" }] : []),
     ...(user?.platformAdmin ? [{ label: "Nueva organización", path: "/platform/organizations/new" }] : []),
-    ...modules.filter((module) => module.code !== "ADM-02" && module.code !== "ADM-04").map((module) => ({ label: `${module.code} · ${module.name}`, path: `/modules/${module.code}` })),
+    ...(user?.platformAdmin ? [{ label: "Configuración de instalación", path: "/platform/settings" }] : []),
+    ...modules.filter((module) => module.code !== "ADM-02" && module.code !== "ADM-04" && module.code !== "ADM-06").map((module) => ({ label: `${module.code} · ${module.name}`, path: `/modules/${module.code}` })),
   ];
   return (
     <Box component="nav" aria-label="Navegación principal" sx={{ px: 1.5, py: 2 }}>
@@ -132,7 +135,7 @@ function Dashboard(): React.JSX.Element {
         <Paper component="section" variant="outlined" sx={{ flex: "1 1 220px", p: 2.5 }}><Typography color="text.secondary" variant="overline">PLATAFORMA</Typography><Typography sx={{ fontWeight: 700, mt: 0.5 }} variant="h5">Base administrativa</Typography><Typography color="text.secondary" variant="body2">Instalación independiente para organizaciones y empresas.</Typography></Paper>
         <Box sx={{ flex: "2 1 360px", minWidth: 0 }}><ApiStatusCard /></Box>
       </Box>
-      <Box component="section" aria-labelledby="modules-heading"><Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}><Typography component="h2" id="modules-heading" variant="h6">Módulos</Typography><Chip label="En implementación" size="small" variant="outlined" /></Stack><Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>{modules.map((module) => { const available = (module.code === "ADM-01" && (user?.permissions.includes("companies.read") || user?.permissions.includes("branches.read"))) || (module.code === "ADM-02" && user?.permissions.includes("users.read")) || (module.code === "ADM-04" && user?.permissions.includes("roles.read")) || (module.code === "ADM-10" && user?.permissions.includes("catalogs.read")); return <Card key={module.code} variant="outlined" sx={{ flex: "1 1 220px" }}><CardContent><Typography color="text.secondary" variant="overline">{module.code}</Typography><Typography sx={{ fontWeight: 600 }} variant="body1">{module.name}</Typography><Chip label={available ? "Disponible" : "En preparación"} color={available ? "success" : "default"} size="small" sx={{ mt: 1.5 }} variant="outlined" /></CardContent></Card>; })}</Box></Box>
+      <Box component="section" aria-labelledby="modules-heading"><Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}><Typography component="h2" id="modules-heading" variant="h6">Módulos</Typography><Chip label="En implementación" size="small" variant="outlined" /></Stack><Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>{modules.map((module) => { const available = (module.code === "ADM-01" && (user?.permissions.includes("companies.read") || user?.permissions.includes("branches.read"))) || (module.code === "ADM-02" && user?.permissions.includes("users.read")) || (module.code === "ADM-04" && user?.permissions.includes("roles.read")) || (module.code === "ADM-06" && user?.permissions.includes("settings.read")) || (module.code === "ADM-10" && user?.permissions.includes("catalogs.read")); return <Card key={module.code} variant="outlined" sx={{ flex: "1 1 220px" }}><CardContent><Typography color="text.secondary" variant="overline">{module.code}</Typography><Typography sx={{ fontWeight: 600 }} variant="body1">{module.name}</Typography><Chip label={available ? "Disponible" : "En preparación"} color={available ? "success" : "default"} size="small" sx={{ mt: 1.5 }} variant="outlined" /></CardContent></Card>; })}</Box></Box>
     </Stack>
   );
 }
@@ -145,6 +148,7 @@ function ModulePage(): React.JSX.Element {
   if (module.code === "ADM-02") return <UsersPage />;
   if (module.code === "ADM-04") return <RolesPage />;
   if (module.code === "ADM-10") return <CatalogsPage />;
+  if (module.code === "ADM-06") return <SettingsPage />;
   return <Stack spacing={2}><Box><Typography color="text.secondary" variant="overline">{module.code}</Typography><Typography component="h1" sx={{ fontWeight: 700 }} variant="h4">{module.name}</Typography></Box><Alert severity="info">Este módulo está pendiente de implementación.</Alert><Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}><Typography sx={{ fontWeight: 600 }} variant="h6">Aún no hay contenido disponible</Typography><Typography color="text.secondary" sx={{ mt: 0.75 }}>Las funciones de {module.name.toLocaleLowerCase("es-BO")} aparecerán cuando se complete su tarea.</Typography></Paper></Stack>;
 }
 
@@ -177,6 +181,7 @@ function AuthenticatedApplication({ mode, onToggleMode }: { mode: "light" | "dar
           <Route path="/modules/:moduleCode" element={<ModulePage />} />
           <Route path="/platform/organizations" element={<PlatformOrganizationsPage />} />
           <Route path="/platform/organizations/new" element={<CreateOrganizationPage />} />
+          <Route path="/platform/settings" element={<SettingsPage installationOnly />} />
           <Route path="*" element={<Stack spacing={2}><Alert severity="warning">No encontramos la página solicitada.</Alert><Button component={Link} to="/">Volver al resumen</Button></Stack>} />
         </Routes>
       </Box>

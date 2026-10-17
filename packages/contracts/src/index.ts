@@ -212,6 +212,77 @@ export interface BranchItem {
   updatedAt: string;
 }
 
+export type SettingScopeType = "INSTALLATION" | "ORGANIZATION" | "COMPANY" | "BRANCH";
+export type SettingKey = "locale" | "currency" | "timeZone" | "identity.name" | "identity.logoUrl" | "identity.brandColor";
+
+export interface SettingItem {
+  id: string;
+  scopeType: SettingScopeType;
+  organizationId: string | null;
+  companyId: string | null;
+  branchId: string | null;
+  key: SettingKey;
+  valueType: "STRING";
+  value: string;
+  updatedAt: string;
+}
+
+export interface EffectiveSettingItem {
+  key: SettingKey;
+  valueType: "STRING";
+  value: string | null;
+  sourceScopeType: SettingScopeType | null;
+  sourceOrganizationId: string | null;
+  sourceCompanyId: string | null;
+  sourceBranchId: string | null;
+  updatedAt: string | null;
+}
+
+export interface EffectiveSettingsResponse {
+  target: { scopeType: Exclude<SettingScopeType, "INSTALLATION">; organizationId: string; companyId: string | null; branchId: string | null };
+  items: EffectiveSettingItem[];
+}
+
+export interface SettingScopeOptions {
+  organization: { canRead: boolean; canUpdate: boolean };
+  companies: Array<{
+    id: string;
+    legalName: string;
+    canRead: boolean;
+    canUpdate: boolean;
+    branches: Array<{ id: string; code: string; name: string; canRead: boolean; canUpdate: boolean }>;
+  }>;
+  totalCompanies: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BusinessHourInterval {
+  start: string;
+  end: string;
+}
+
+export interface BusinessHourDay {
+  weekday: number;
+  intervals: BusinessHourInterval[];
+  sourceScopeType?: "COMPANY" | "BRANCH" | null;
+  updatedAt?: string | null;
+}
+
+export interface NumberSequence {
+  id: string;
+  scopeType: "ORGANIZATION" | "COMPANY" | "BRANCH";
+  organizationId: string;
+  companyId: string | null;
+  branchId: string | null;
+  documentType: string;
+  period: string;
+  prefix: string;
+  padding: number;
+  nextValue: string;
+  updatedAt: string;
+}
+
 export interface OrganizationMembershipStatusResponse {
   membershipId: string;
   membershipStatus: "ACTIVE" | "SUSPENDED";
