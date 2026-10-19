@@ -2,7 +2,7 @@
 ## Entidades
 AuditEvent.
 ## Reglas y alcance
-Registro append-only de acciones sensibles y cambios relevantes en transacción. Actor sistema explícito. Sanitizar before/after; no documentos completos ni contraseñas/tokens. Auditar sesiones sin credenciales. Sin edición/borrado por UI. Retención propuesta 365 días configurable con mínimo definido; tareas de purga documentadas.
+Registro append-only de acciones sensibles y cambios relevantes en transacción. Actor sistema explícito. Sanitizar before/after; no documentos completos ni contraseñas/tokens. Auditar sesiones sin credenciales. Sin edición/borrado por UI ni purga automática: el propietario aprobó conservar todos los eventos. Cualquier futura política de retención requiere una nueva decisión explícita.
 ## Panel web
 Listado con filtros fecha/actor/recurso y detalle filtrado por alcance.
 Listas paginadas, filtros, carga/vacío/error, validación; botones dependen de permisos efectivos sin reemplazar backend.
