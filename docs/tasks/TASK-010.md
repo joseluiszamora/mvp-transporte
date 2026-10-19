@@ -1,5 +1,5 @@
 # TASK-010 — Personal
-Estado: implementación local en `task/010-personal`; revisión técnica pendiente de integración con Docker; aceptación funcional pendiente del propietario. Dependencias: 009. Issue GitHub: [#10](https://github.com/joseluiszamora/mvp-transporte/issues/10).
+Estado: implementación en `task/010-personal`; PR #25 abierta hacia `main` con CI pendiente. Aceptación funcional pendiente del propietario. Dependencias: 009. Issue GitHub: [#10](https://github.com/joseluiszamora/mvp-transporte/issues/10).
 
 ## Contexto
 Leer AGENTS.md, docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md y docs/modules/ADM-05.md. Las decisiones aprobadas prevalecen.
@@ -26,4 +26,4 @@ Implementar ADM-05: CRUD laboral, datos personales restringidos, vínculo opcion
 Repetir `npm run test:integration` con Docker Desktop en ejecución; revisar CI tras publicar la rama; prueba manual autenticada y aceptación funcional del propietario. No cerrar la Issue #10 hasta esa aceptación.
 
 ## Entrega
-Código, migración, contratos, UI y documentación en la rama `task/010-personal`. La entrega se apila sobre la rama de TASK-009 mientras su PR sigue abierto. Registrar el SHA/PR y resultados finales tras completar integración. No desplegar producción.
+Código, migración, contratos, UI y documentación en la rama `task/010-personal`. TASK-009 quedó integrada en `main` por PR #24 (merge `3c76c3aa9321578d07af4c04e4424b99dbe806a5`). PR #25 apunta ahora a `main`; registrar el resultado de CI y la revisión técnica antes de integrar TASK-010. No desplegar producción.
