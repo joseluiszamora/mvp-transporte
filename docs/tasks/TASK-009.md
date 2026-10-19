@@ -14,7 +14,7 @@ Ejecutar checks raíz disponibles; tests integración en BD desechable para inva
 ## Entrega
 Código/migraciones/contratos, pruebas significativas, documentación actualizada. Commit identificable TASK-009. Estado técnico en revisión o integrado; aceptación funcional por propietario. Reportar riesgos y comandos exactos ejecutados.
 
-## Evidencia técnica — 17/10/2026
+## Evidencia técnica — 18/10/2026
 
 - Implementados el driver local privado, metadatos/enlaces con integridad de tenant y scope, carga multipart en streaming, descargas autorizadas, eliminación con periodo de gracia, limpieza CLI y pantalla ADM-08.
 - Solo se registran enlaces explícitos `COMPANY_ATTACHMENT` y `BRANCH_ATTACHMENT`. `EMPLOYEE_DOCUMENT` se rechaza hasta que ADM-05 aporte la entidad y su política; evita anticipar o debilitar el control de datos personales.
