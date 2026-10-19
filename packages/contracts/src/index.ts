@@ -94,6 +94,40 @@ export interface AuditEventSummary {
 export interface AuditEventDetails extends AuditEventSummary {
   diff: { before?: Record<string, unknown> | null; after?: Record<string, unknown> | null } | null;
 }
+
+export interface InstallationSmtpSettings {
+  source: "DATABASE" | "ENVIRONMENT" | "UNCONFIGURED";
+  configured: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  requireTls: boolean;
+  fromAddress: string;
+  username: string;
+  passwordConfigured: boolean;
+  updatedAt: string | null;
+}
+
+export interface NotificationAccessResponse {
+  canReadHistory: boolean;
+}
+
+export interface EmailTemplateSummary {
+  code: string;
+  subject: string;
+  status: RecordStatus;
+  updatedAt: string;
+}
+
+export interface EmailDeliverySummary {
+  id: string;
+  templateCode: string;
+  attempt: number;
+  outcome: "SENT" | "FAILED";
+  errorCode: string | null;
+  createdAt: string;
+}
+
 export type RoleStatus = "ACTIVE" | "INACTIVE";
 export type RoleScopeType = "ORGANIZATION" | "COMPANY" | "BRANCH";
 

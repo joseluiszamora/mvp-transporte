@@ -51,6 +51,14 @@ Tokens activación y recuperación: aleatorios fuertes, hash almacenado, un solo
 
 La integración desechable cubre concurrencia, refresh/replay, aislamiento entre tenants, permisos, invitaciones/activación, anti-enumeración, recuperación, revocación y entrega a Mailpit. La navegación visual y la coordinación con varias pestañas quedan pendientes de prueba manual del propietario; no son aceptación funcional automática.
 
+## Administración de correo (TASK-012)
+
+- Solo `PLATFORM_ADMIN` puede leer o cambiar la configuración SMTP de instalación y enviar una prueba a un destinatario explícito. Las rutas mutables requieren origen web permitido y devuelven errores SMTP genéricos; no registran destinatario, contraseña ni mensaje de prueba.
+- La contraseña guardada se cifra como AES-256-GCM con una clave Base64 canónica externa de 32 bytes (`SMTP_SETTINGS_ENCRYPTION_KEY`), separada de la clave de payload del outbox. La API y la UI solo exponen `passwordConfigured`; un campo vacío conserva la contraseña y quitarla requiere confirmación explícita.
+- La fila de instalación prevalece sobre las variables SMTP del entorno. El worker vuelve a leer la configuración por ciclo; si no hay fila, conserva la compatibilidad con el SMTP de entorno. La autenticación SMTP requiere TLS implícito o STARTTLS.
+- Plantillas del sistema se consultan con permiso efectivo de organización. El historial también exige `notifications.read` en scope `ORGANIZATION`; scopes de empresa/sucursal no son válidos porque el outbox no guarda esas claves. PostgreSQL filtra por la organización seleccionada, y la respuesta no contiene destinatarios, cuerpo ni payload.
+- Los resultados de entrega exponen solo intento, estado y código técnico sanitizado. Outbox deduplica el evento, pero la entrega SMTP es al menos una vez: si el proceso cae después de la aceptación del servidor antes de confirmar en PostgreSQL, un reintento puede duplicar el correo.
+
 ## Implementación de TASK-006
 
 - Las rutas de empresas y sucursales toman el tenant de la membresía seleccionada en la sesión. Cada ID se vuelve a cargar dentro de ese tenant antes de autorizar; los listados filtran cada fila por su permiso y alcance antes de calcular el total y paginar.

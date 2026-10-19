@@ -1582,6 +1582,7 @@ async function verifyAuthentication(database, smtpPort, mailpitHttpPort, createA
   const settings = {
     accessTokenSecret,
     emailPayloadEncryptionKey: encryptionKey,
+    smtpSettingsEncryptionKey: Buffer.alloc(32, 81).toString("base64"),
     publicWebUrl: "http://127.0.0.1:5173",
     secureCookies: false,
   };
@@ -1840,6 +1841,103 @@ async function verifyAuthentication(database, smtpPort, mailpitHttpPort, createA
       body: { email: platformEmail, password: "Platform Administrator Password 2026!" },
     });
     assert.equal(platformLogin.response.status, 200);
+    const smtpConfiguration = await apiRequest(baseUrl, "/notifications/smtp", {
+      method: "PUT", accessToken: platformLogin.body.accessToken,
+      body: { host: "127.0.0.1", port: smtpPort, secure: false, requireTls: false, fromAddress: "MVP Transporte <no-reply@example.test>" },
+    });
+    assert.equal(smtpConfiguration.response.status, 200, "Solo plataforma configura SMTP de instalación.");
+    assert.equal(smtpConfiguration.body.source, "DATABASE");
+    assert.equal(smtpConfiguration.body.passwordConfigured, false);
+    assert.ok(!Object.hasOwn(smtpConfiguration.body, "password"), "La respuesta de configuración nunca contiene contraseña SMTP.");
+    const smtpTest = await apiRequest(baseUrl, "/notifications/smtp/test", {
+      method: "POST", accessToken: platformLogin.body.accessToken, body: { recipient: platformEmail },
+    });
+    assert.equal(smtpTest.response.status, 200, "La prueba SMTP debe enviar a Mailpit.");
+    await getMailpitText(mailpitHttpPort, platformEmail, "Prueba de correo");
+    const smtpTestAudit = await database.query(
+      "SELECT count(*)::int AS total, string_agg(COALESCE(diff::text, ''), ' ') AS diffs FROM audit_events WHERE actor_id = $1::uuid AND action = 'SMTP_TEST_SUCCEEDED'",
+      [platformLogin.body.user.id],
+    );
+    assert.equal(smtpTestAudit.rows[0].total, 1, "El envío de prueba debe quedar auditado.");
+    assert.doesNotMatch(smtpTestAudit.rows[0].diffs, new RegExp(platformEmail, "iu"), "La auditoría SMTP no conserva el destinatario de prueba.");
+
+    const tenantSmtpForbidden = await apiRequest(baseUrl, "/notifications/smtp", { accessToken: adminToken });
+    assert.equal(tenantSmtpForbidden.response.status, 403, "La administración SMTP es exclusiva de plataforma.");
+    const tenantEmailAccess = await apiRequest(baseUrl, "/notifications/access", { accessToken: adminToken });
+    assert.equal(tenantEmailAccess.response.status, 200);
+    assert.equal(tenantEmailAccess.body.canReadHistory, true, "El admin de tenant tiene notificaciones.read a nivel de organización.");
+    const tenantTemplates = await apiRequest(baseUrl, "/notifications/templates", { accessToken: adminToken });
+    assert.equal(tenantTemplates.response.status, 200);
+    assert.deepEqual(tenantTemplates.body.items.map((item) => item.code).sort(), ["account.activation", "account.membership_invitation", "account.password_changed", "account.recovery"]);
+    const tenantEmailHistory = await apiRequest(baseUrl, "/notifications/deliveries?limit=100", { accessToken: adminToken });
+    assert.equal(tenantEmailHistory.response.status, 200);
+    assert.ok(tenantEmailHistory.body.items.length > 0, "El historial tenant debe incluir entregas de correo existentes.");
+    assert.ok(!JSON.stringify(tenantEmailHistory.body).match(/recipient|payload|password|smtpSettingsEncryptionKey/iu), "El historial omite destinatarios, contenido y secretos.");
+    const expectedTenantDeliveryIds = await database.query(
+      `SELECT delivery.id FROM email_deliveries AS delivery JOIN email_outbox AS outbox ON outbox.id = delivery.outbox_id
+       WHERE outbox.organization_id = $1::uuid ORDER BY delivery.created_at DESC, delivery.id DESC LIMIT 100`,
+      [adminMe.body.selectedOrganizationId],
+    );
+    assert.deepEqual(tenantEmailHistory.body.items.map((item) => item.id), expectedTenantDeliveryIds.rows.map((item) => item.id), "El historial sigue únicamente la organización seleccionada.");
+    const otherTenantDeliveryIds = await database.query(
+      `SELECT delivery.id FROM email_deliveries AS delivery JOIN email_outbox AS outbox ON outbox.id = delivery.outbox_id
+       WHERE outbox.organization_id = $1::uuid`, [tenantA.id],
+    );
+    assert.ok(otherTenantDeliveryIds.rows.every((item) => !tenantEmailHistory.body.items.some((entry) => entry.id === item.id)), "El historial no muestra entregas de otros tenants.");
+
+    const tenantBCompanyBranch = await database.query(
+      `SELECT company.id AS company_id, branch.id AS branch_id FROM companies AS company
+       JOIN branches AS branch ON branch.company_id = company.id AND branch.organization_id = company.organization_id
+       WHERE company.organization_id = $1::uuid LIMIT 1`, [tenantB.id],
+    );
+    assert.ok(tenantBCompanyBranch.rows[0]);
+    const branchReaderId = randomUUID();
+    const branchReaderEmail = `task012.branch-reader.${marker}@example.test`;
+    const branchReaderMembership = randomUUID();
+    const branchReaderHash = await hashPassword("Task 012 Branch Reader Password 2026!");
+    const branchReaderRole = await database.query("SELECT id FROM roles WHERE organization_id = $1::uuid AND code = 'supervisor'", [tenantB.id]);
+    assert.ok(branchReaderRole.rows[0]);
+    await database.query(
+      `INSERT INTO users (id, normalized_email, display_name, password_hash, status, updated_at)
+       VALUES ($1::uuid, $2, 'Lector de correo por sucursal', $3, 'ACTIVE', CURRENT_TIMESTAMP)`,
+      [branchReaderId, branchReaderEmail, branchReaderHash],
+    );
+    await database.query(
+      `INSERT INTO organization_memberships (id, organization_id, user_id, status, updated_at)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, 'ACTIVE', CURRENT_TIMESTAMP)`,
+      [branchReaderMembership, tenantB.id, branchReaderId],
+    );
+    await database.query(
+      `INSERT INTO role_assignments (id, organization_id, membership_id, role_id, scope_type, company_id, branch_id)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, 'BRANCH', $5::uuid, $6::uuid)`,
+      [randomUUID(), tenantB.id, branchReaderMembership, branchReaderRole.rows[0].id, tenantBCompanyBranch.rows[0].company_id, tenantBCompanyBranch.rows[0].branch_id],
+    );
+    const branchReaderLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: branchReaderEmail, password: "Task 012 Branch Reader Password 2026!" } });
+    assert.equal(branchReaderLogin.response.status, 200);
+    const branchReaderAccess = await apiRequest(baseUrl, "/notifications/access", { accessToken: branchReaderLogin.body.accessToken });
+    assert.deepEqual(branchReaderAccess.body, { canReadHistory: false }, "Un grant solo de sucursal no concede acceso a historial tenant.");
+    const branchReaderHistory = await apiRequest(baseUrl, "/notifications/deliveries", { accessToken: branchReaderLogin.body.accessToken });
+    assert.equal(branchReaderHistory.response.status, 403, "La API exige notifications.read de organización.");
+
+    const smtpSecret = `task012-smtp-secret-${marker}`;
+    const smtpWithCredential = await apiRequest(baseUrl, "/notifications/smtp", {
+      method: "PUT", accessToken: platformLogin.body.accessToken,
+      body: { host: "127.0.0.1", port: smtpPort, secure: false, requireTls: true, fromAddress: "MVP Transporte <no-reply@example.test>", username: "smtp-test-user", password: smtpSecret },
+    });
+    assert.equal(smtpWithCredential.response.status, 200);
+    assert.equal(smtpWithCredential.body.passwordConfigured, true);
+    assert.doesNotMatch(JSON.stringify(smtpWithCredential.body), new RegExp(smtpSecret, "u"));
+    const persistedSmtpSecret = await database.query("SELECT password_envelope FROM installation_smtp_settings WHERE id = 1");
+    assert.ok(persistedSmtpSecret.rows[0].password_envelope);
+    assert.doesNotMatch(JSON.stringify(persistedSmtpSecret.rows[0].password_envelope), new RegExp(smtpSecret, "u"), "La contraseña SMTP se guarda cifrada.");
+    assert.notEqual(persistedSmtpSecret.rows[0].password_envelope.ciphertext, smtpSecret);
+    const clearedSmtpSecret = await apiRequest(baseUrl, "/notifications/smtp", {
+      method: "PUT", accessToken: platformLogin.body.accessToken,
+      body: { host: "127.0.0.1", port: smtpPort, secure: false, requireTls: false, fromAddress: "MVP Transporte <no-reply@example.test>", username: null, clearPassword: true },
+    });
+    assert.equal(clearedSmtpSecret.response.status, 200);
+    assert.equal(clearedSmtpSecret.body.passwordConfigured, false, "El borrado requiere una acción explícita.");
+
     const platformSettings = await apiRequest(baseUrl, "/settings/installation", { accessToken: platformLogin.body.accessToken });
     assert.equal(platformSettings.response.status, 200);
     assert.deepEqual(platformSettings.body.items.map((item) => item.key).sort(), ["currency", "locale", "timeZone"]);

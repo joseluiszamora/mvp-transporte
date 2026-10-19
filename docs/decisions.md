@@ -91,3 +91,8 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 - 18/10/2026: la sanitización se aplica al guardar y al devolver el detalle para proteger también filas históricas. No se exponen diffs en el listado.
 - 19/10/2026: el propietario aprueba conservar todos los eventos de auditoría, sin purga ni retención automática.
 - 19/10/2026: el auditor con permiso limitado a una sucursal puede consultar eventos de empleados asignados actualmente a esa sucursal. La visibilidad del historial cambia según la asignación vigente; los eventos no tienen una sucursal histórica implícita.
+
+## Implementación de TASK-012
+- 19/10/2026: SMTP es configuración singleton por instalación; una fila persistida prevalece sobre variables de entorno. `SMTP_SETTINGS_ENCRYPTION_KEY` cifra la contraseña con AES-256-GCM y debe ser una clave externa e independiente de `EMAIL_PAYLOAD_ENCRYPTION_KEY`. Solo `PLATFORM_ADMIN` puede consultar, modificar y probar SMTP.
+- 19/10/2026: el historial de correo exige `notifications.read` asignado a nivel de organización. Se rechazan grants limitados a empresa o sucursal porque `EmailOutbox` no registra ese alcance; la consulta usa la organización activa de sesión y no recibe IDs de tenant del navegador.
+- 19/10/2026: la prueba SMTP registra en auditoría solo su resultado; no conserva destinatario ni credenciales. Las plantillas transaccionales existentes siguen siendo código/migración administrados y de solo lectura desde la UI. Se mantiene la entrega al menos una vez; un crash tras aceptación SMTP puede duplicar el mensaje.

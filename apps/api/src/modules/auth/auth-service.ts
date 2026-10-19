@@ -23,6 +23,7 @@ const dummyPasswordHash = createDummyPasswordHash();
 export interface AuthSettings {
   accessTokenSecret?: string;
   emailPayloadEncryptionKey?: string;
+  smtpSettingsEncryptionKey?: string;
   publicWebUrl?: string;
   secureCookies: boolean;
 }

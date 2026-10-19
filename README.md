@@ -14,7 +14,7 @@ Monorepo para una base administrativa reutilizable en instalaciones y bases de d
 3. Inicia PostgreSQL y Mailpit con `docker compose up -d`.
 4. En una terminal, inicia la API con `npm run dev:api`.
 5. En otra terminal, inicia la web con `npm run dev:web`.
-6. Para enviar correos locales, define `EMAIL_PAYLOAD_ENCRYPTION_KEY` y ejecuta el worker con `npm run dev:email-worker`.
+6. Para enviar correos locales, genera `EMAIL_PAYLOAD_ENCRYPTION_KEY` y `SMTP_SETTINGS_ENCRYPTION_KEY`, configura el SMTP desde ADM-09 o con variables de entorno y ejecuta `npm run dev:email-worker`.
 
 La API queda en `http://127.0.0.1:4000`; su health check es `/api/v1/health`, readiness es `/api/v1/ready` y OpenAPI se sirve en `/api/v1/openapi.json`. La web queda en `http://127.0.0.1:5173`. Mailpit usa `http://127.0.0.1:8025` para su bandeja y `127.0.0.1:1025` para SMTP.
 
@@ -39,13 +39,15 @@ npm run db:seed
 
 Mailpit recibe SMTP en `127.0.0.1:1025` y muestra el buzón en `http://127.0.0.1:8025`. El worker consulta el outbox de PostgreSQL; una caída SMTP no bloquea la transacción que creó el mensaje y los reintentos usan espera exponencial limitada.
 
-Genera una clave local de 32 bytes para cifrar los datos de plantilla que esperan en el outbox:
+Genera dos claves locales distintas de 32 bytes: `EMAIL_PAYLOAD_ENCRYPTION_KEY` cifra los enlaces y datos de plantillas del outbox; `SMTP_SETTINGS_ENCRYPTION_KEY` cifra la contraseña SMTP guardada por ADM-09. No reutilices una clave para el otro propósito.
 
 ```sh
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
 ```
 
-Guárdala como `EMAIL_PAYLOAD_ENCRYPTION_KEY` en `.env` y no la compartas ni la registres. El worker requiere `DATABASE_URL`, la clave, `SMTP_HOST`, `SMTP_PORT` y `SMTP_FROM`; credenciales SMTP son opcionales y, si se configuran, se exige TLS salvo que se indique lo contrario. Las plantillas de activación, recuperación y cambio de contraseña se versionan en migraciones; la configuración administrativa de correo queda para tareas posteriores.
+Guarda cada salida en su variable correspondiente dentro de `.env`; no las compartas ni las registres. El worker requiere `DATABASE_URL` y `EMAIL_PAYLOAD_ENCRYPTION_KEY`. El SMTP se puede definir por entorno (`SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` y variables asociadas) o desde **ADM-09 · Correo** como administrador de plataforma; una configuración guardada en la base de datos prevalece sobre el entorno. Para almacenar una contraseña SMTP también se requiere `SMTP_SETTINGS_ENCRYPTION_KEY`. Si se usa autenticación, SMTP exige TLS implícito o STARTTLS.
+
+ADM-09 permite guardar la configuración SMTP con contraseña oculta, enviar una prueba explícita a una dirección indicada y consultar plantillas del sistema e historial de entregas. La lectura del historial exige `notifications.read` en la organización seleccionada; permisos limitados a empresa o sucursal no alcanzan porque el outbox no registra ese alcance. El historial omite destinatario y contenido. Las plantillas de activación, recuperación y cambio de contraseña son administradas por el código y sus migraciones.
 
 El transporte SMTP ofrece entrega al menos una vez: si el proceso cae después de que el servidor acepte el correo pero antes de guardar ese resultado en PostgreSQL, un reintento puede duplicarlo.
 
@@ -59,7 +61,7 @@ Quitar un adjunto lo oculta y marca para purga después de 24 horas. Programa `n
 
 ## Acceso inicial y autenticación
 
-Configura dos secretos distintos en `.env`: `ACCESS_TOKEN_SECRET` y `EMAIL_PAYLOAD_ENCRYPTION_KEY`. Para generar cada uno, ejecuta el siguiente comando por separado y guarda su salida solo en `.env`:
+Configura tres secretos distintos en `.env`: `ACCESS_TOKEN_SECRET`, `EMAIL_PAYLOAD_ENCRYPTION_KEY` y `SMTP_SETTINGS_ENCRYPTION_KEY`. Para generar cada uno, ejecuta el siguiente comando por separado y guarda su salida solo en `.env`:
 
 ```sh
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"

@@ -1,5 +1,5 @@
 # TASK-012 — Administración de correo
-Estado: pendiente. Dependencias: 011. Issue GitHub: no creada.
+Estado: en revisión técnica local; aceptación funcional pendiente del propietario. Dependencias: 011. Issue GitHub: #12.
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
