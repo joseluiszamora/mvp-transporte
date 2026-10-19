@@ -122,6 +122,8 @@ export async function cleanupOrphanedFiles(
       );
       for (const file of result.rows) {
         await removeStoredPath(getStoredFilePath(storageRoot, file.storage_key));
+        await client.query("UPDATE employees SET photo_file_id = NULL WHERE photo_file_id = $1::uuid", [file.id]);
+        await client.query("DELETE FROM employee_documents WHERE file_id = $1::uuid", [file.id]);
         await appendAuditEvent(client, {
           organizationId: file.organization_id, companyId: file.company_id, branchId: file.branch_id,
           actor: { type: "SYSTEM" }, action: "FILE_PURGED", resourceType: "File", resourceId: file.id,

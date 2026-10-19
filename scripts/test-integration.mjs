@@ -567,6 +567,7 @@ async function apiRequest(baseUrl, path, options = {}) {
 async function multipartFileRequest(baseUrl, path, options) {
   const form = new FormData();
   form.append("file", new Blob([options.content], { type: options.mime }), options.filename);
+  for (const [name, value] of Object.entries(options.fields ?? {})) form.append(name, value);
   if (options.extraField) form.append("unexpected", options.extraField);
   if (options.extraFile) form.append("extra", new Blob([options.content], { type: options.mime }), "extra.pdf");
   const response = await fetch(`${baseUrl}/api/v1${path}`, {
@@ -1161,6 +1162,70 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     assert.equal(recipientMe.response.status, 200);
     assert.ok(recipientMe.body.permissions.includes("roles.assign"));
     assert.ok(recipientMe.body.permissions.includes("companies.read"));
+    const employeeWithoutRead = await apiRequest(baseUrl, "/employees?limit=100", { accessToken: recipientToken });
+    assert.equal(employeeWithoutRead.response.status, 403, "Vincular una cuenta no concede por sí solo acceso al módulo de personal.");
+    const linkedEmployee = await apiRequest(baseUrl, "/employees", {
+      method: "POST", accessToken: adminToken,
+      body: {
+        companyId, internalCode: `EMP-${marker.slice(0, 8)}`, firstNames: "María Elena", lastNames: "Prueba Integración",
+        personalDocumentNumber: `CI-${marker.slice(0, 8)}`, personalPhone: "+59170000000", personalEmail: `empleada.${marker}@example.test`,
+        personalAddress: "Dirección privada de integración", positionId: "00000000-0000-4000-8000-000000000724",
+        hireDate: "2026-01-15", branchIds: [branchId, otherBranchId], userId: recipientId,
+      },
+    });
+    assert.equal(linkedEmployee.response.status, 201, `Un empleado con cuenta opcional debe crearse: ${JSON.stringify(linkedEmployee.body)}`);
+    const linkedEmployeeId = linkedEmployee.body.item.id;
+    assert.equal(linkedEmployee.body.item.personalData.documentNumber, `CI-${marker.slice(0, 8)}`, "El administrador con permiso personal puede consultar identidad.");
+    const employeeWithoutUser = await apiRequest(baseUrl, "/employees", {
+      method: "POST", accessToken: adminToken,
+      body: { companyId, internalCode: `NOUSER-${marker.slice(0, 8)}`, firstNames: "Persona", lastNames: "Sin Cuenta", hireDate: "2026-02-01", branchIds: [otherBranchId] },
+    });
+    assert.equal(employeeWithoutUser.response.status, 201, "Un empleado puede existir sin identidad de usuario.");
+    const wrongTenantUserLink = await apiRequest(baseUrl, "/employees", {
+      method: "POST", accessToken: adminToken,
+      body: { companyId, internalCode: `FOREIGN-${marker.slice(0, 8)}`, firstNames: "Cuenta", lastNames: "Ajena", hireDate: "2026-02-01", branchIds: [branchId], userId: tenantBAdminId },
+    });
+    assert.equal(wrongTenantUserLink.response.status, 400, "No se puede asociar una identidad que no pertenece a la organización.");
+    const employeeReader = await createRole(`Consulta de personal ${marker}`, ["employees.read", "employees.update"]);
+    const employeeReaderAssignment = await assign({ membershipId: recipientMembershipId, roleId: employeeReader.id, scopeType: "BRANCH", companyId, branchId });
+    assert.equal(employeeReaderAssignment.response.status, 201);
+    const branchEmployees = await apiRequest(baseUrl, `/employees?limit=100&companyId=${companyId}`, { accessToken: recipientToken });
+    assert.equal(branchEmployees.response.status, 200);
+    assert.ok(branchEmployees.body.items.some((employee) => employee.id === linkedEmployeeId), "El visor con cuenta puede consultar al empleado de su sucursal.");
+    assert.ok(!branchEmployees.body.items.some((employee) => employee.id === employeeWithoutUser.body.item.id), "Una autorización de sucursal no lista empleados de otra sucursal.");
+    const branchEmployeeDetail = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { accessToken: recipientToken });
+    assert.equal(branchEmployeeDetail.response.status, 200);
+    assert.equal(Object.hasOwn(branchEmployeeDetail.body.item, "personalData"), false, "La lista y el detalle del supervisor no exponen identificación personal por defecto.");
+    assert.equal(Object.hasOwn(branchEmployeeDetail.body.item, "linkedUser"), false, "El detalle no expone la identidad vinculada sin permiso personal.");
+    assert.deepEqual(branchEmployeeDetail.body.item.branches.map((item) => item.id), [branchId], "Solo se devuelve la asignación de sucursal autorizada.");
+    const branchCannotChangeSharedIdentity = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { method: "PATCH", accessToken: recipientToken, body: { firstNames: "Cambio global denegado" } });
+    assert.equal(branchCannotChangeSharedIdentity.response.status, 403, "Un permiso de sucursal no altera los datos laborales compartidos de toda la empresa.");
+    const branchAssignmentUpdate = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { method: "PATCH", accessToken: recipientToken, body: { branchIds: [branchId] } });
+    assert.equal(branchAssignmentUpdate.response.status, 200, "El permiso de sucursal puede administrar su propia asignación.");
+    const preservedOtherBranch = await database.query("SELECT count(*)::int AS total FROM employee_branch_assignments WHERE employee_id = $1::uuid AND branch_id = $2::uuid", [linkedEmployeeId, otherBranchId]);
+    assert.equal(preservedOtherBranch.rows[0].total, 1, "Actualizar la asignación propia no elimina una sucursal que el actor no puede administrar.");
+    const personalDataEditorRole = await createRole(`Editor de datos personales sin users.read ${marker}`, ["employees.read", "employees.update", "employees.personal.read"]);
+    const personalDataEditorAssignment = await assign({ membershipId: recipientMembershipId, roleId: personalDataEditorRole.id, scopeType: "COMPANY", companyId });
+    assert.equal(personalDataEditorAssignment.response.status, 201);
+    const unauthorizedUserUnlink = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { method: "PATCH", accessToken: recipientToken, body: { userId: null } });
+    assert.equal(unauthorizedUserUnlink.response.status, 403, "Quitar un vínculo también requiere users.read.");
+    const linkedIdentityAfterDeniedUnlink = await database.query("SELECT user_id FROM employees WHERE id = $1::uuid", [linkedEmployeeId]);
+    assert.equal(linkedIdentityAfterDeniedUnlink.rows[0]?.user_id, recipientId, "Un actor sin users.read no puede borrar silenciosamente el vínculo existente.");
+    const removePersonalDataEditor = await apiRequest(baseUrl, `/organizations/role-assignments/${personalDataEditorAssignment.body.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(removePersonalDataEditor.response.status, 204, "La fixture amplia se retira después de probar la protección del vínculo.");
+    const employeeDocumentTypeId = documentItems.body.items.find((item) => item.code === "IDENTITY_CARD").id;
+    const employeeDocument = await multipartFileRequest(baseUrl, `/employees/${linkedEmployeeId}/documents`, {
+      accessToken: adminToken, filename: "identidad.pdf", mime: "application/pdf", content: pdfContent,
+      fields: { typeId: employeeDocumentTypeId, issuedAt: "2025-01-01", expiresAt: "2030-01-01" },
+    });
+    assert.equal(employeeDocument.response.status, 201, `El administrador puede cargar un documento privado: ${JSON.stringify(employeeDocument.body)}`);
+    const employeePhotoContent = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const employeePhoto = await multipartFileRequest(baseUrl, `/employees/${linkedEmployeeId}/photo`, {
+      accessToken: adminToken, filename: "foto.png", mime: "image/png", content: employeePhotoContent,
+    });
+    assert.equal(employeePhoto.response.status, 201, `El administrador puede cargar una foto privada: ${JSON.stringify(employeePhoto.body)}`);
+    const recipientEmployeeDocs = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}/documents`, { accessToken: recipientToken });
+    assert.equal(recipientEmployeeDocs.response.status, 403, "employees.read no concede employee_documents.read.");
     const deniedFileList = await apiRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, { accessToken: recipientToken });
     assert.equal(deniedFileList.response.status, 403, "Una cuenta sin permiso files.read no puede listar archivos.");
     const deniedFileUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
@@ -1170,6 +1235,49 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     const genericFilesRole = await createRole(`Permisos genéricos de archivos ${marker}`, ["files.read", "files.upload", "files.download"]);
     const genericFilesAssignment = await assign({ membershipId: recipientMembershipId, roleId: genericFilesRole.id, scopeType: "ORGANIZATION" });
     assert.equal(genericFilesAssignment.response.status, 201);
+    const genericFilesCannotDownloadEmployeeDocument = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/${employeeDocument.body.item.id}/content`, {
+      headers: { Authorization: `Bearer ${recipientToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.equal(genericFilesCannotDownloadEmployeeDocument.status, 403, "files.download no reemplaza employee_documents.read para documentos personales.");
+    const genericFilesCannotDownloadPhoto = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/${employeePhoto.body.item.id}/content`, {
+      headers: { Authorization: `Bearer ${recipientToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.equal(genericFilesCannotDownloadPhoto.status, 403, "files.download no reemplaza employees.personal.read para fotos personales.");
+    const employeeSupervisor = await createRole(`Supervisor laboral ${marker}`, [
+      "employees.read", "employees.create", "employees.update", "catalogs.read",
+      "files.upload", "files.read", "files.download", "notifications.read",
+    ]);
+    const employeeSupervisorAssignment = await assign({ membershipId: recipientMembershipId, roleId: employeeSupervisor.id, scopeType: "BRANCH", companyId, branchId });
+    assert.equal(employeeSupervisorAssignment.response.status, 201);
+    const supervisorEmployeeDetails = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { accessToken: recipientToken });
+    assert.equal(supervisorEmployeeDetails.response.status, 200);
+    assert.equal(supervisorEmployeeDetails.body.item.canReadPersonalData, false);
+    assert.equal(supervisorEmployeeDetails.body.item.canReadDocuments, false);
+    assert.equal(Object.hasOwn(supervisorEmployeeDetails.body.item, "personalData"), false, "El supervisor de empresa sigue sin recibir identificación, contacto ni domicilio.");
+    assert.equal(Object.hasOwn(supervisorEmployeeDetails.body.item, "photoFileId"), false, "El supervisor no recibe el ID de la foto personal.");
+    const supervisorEmployeeDocs = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}/documents`, { accessToken: recipientToken });
+    assert.equal(supervisorEmployeeDocs.response.status, 403, "El supervisor no recibe documentos personales por defecto.");
+    const removeEmployeeSupervisor = await apiRequest(baseUrl, `/organizations/role-assignments/${employeeSupervisorAssignment.body.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(removeEmployeeSupervisor.response.status, 204, "La fixture de supervisor se retira después de probar sus permisos ADM-05.");
+    const removeEmployeeReader = await apiRequest(baseUrl, `/organizations/role-assignments/${employeeReaderAssignment.body.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(removeEmployeeReader.response.status, 204, "La fixture de lectura de personal se retira después de probar el alcance de sucursal.");
+    const adminEmployeeDocs = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}/documents`, { accessToken: adminToken });
+    assert.equal(adminEmployeeDocs.response.status, 200);
+    assert.equal(adminEmployeeDocs.body.items.length, 1);
+    assert.equal(adminEmployeeDocs.body.items[0].type.code, "IDENTITY_CARD");
+    const inactiveEmployee = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { method: "PATCH", accessToken: adminToken, body: { status: "INACTIVE" } });
+    assert.equal(inactiveEmployee.response.status, 200, "El administrador puede desactivar un empleado.");
+    assert.equal(inactiveEmployee.body.item.status, "INACTIVE");
+    const inactiveEmployeePhotoUpload = await multipartFileRequest(baseUrl, `/employees/${linkedEmployeeId}/photo`, {
+      accessToken: adminToken, filename: "inactivo.png", mime: "image/png", content: employeePhotoContent,
+    });
+    assert.equal(inactiveEmployeePhotoUpload.response.status, 409, "El empleado inactivo no admite cambios en sus archivos.");
+    const reactivatedEmployee = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}`, { method: "PATCH", accessToken: adminToken, body: { status: "ACTIVE" } });
+    assert.equal(reactivatedEmployee.response.status, 200);
+    const deleteEmployeeDocument = await apiRequest(baseUrl, `/files/${employeeDocument.body.item.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(deleteEmployeeDocument.response.status, 204, "El documento se puede retirar tras autorización específica.");
+    const employeeDocumentsAfterDelete = await apiRequest(baseUrl, `/employees/${linkedEmployeeId}/documents`, { accessToken: adminToken });
+    assert.equal(employeeDocumentsAfterDelete.body.items.length, 0, "Retirar el archivo también elimina su fila de metadatos.");
     const genericFilesCannotCrossResourcePolicy = await apiRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${otherCompanyId}`, { accessToken: recipientToken });
     assert.equal(genericFilesCannotCrossResourcePolicy.response.status, 403, "files.read por sí solo no sustituye companies.read del recurso.");
     const scopedCompanies = await apiRequest(baseUrl, "/organizations/companies?limit=100", { accessToken: recipientToken });

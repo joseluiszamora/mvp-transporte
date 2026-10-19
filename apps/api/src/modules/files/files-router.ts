@@ -18,7 +18,7 @@ import {
 } from "./files-service.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const resourceTypes = new Set<FileResourceType>(["COMPANY_ATTACHMENT", "BRANCH_ATTACHMENT"]);
+const resourceTypes = new Set<FileResourceType>(["COMPANY_ATTACHMENT", "BRANCH_ATTACHMENT", "EMPLOYEE_PHOTO", "EMPLOYEE_DOCUMENT"]);
 
 function resourceType(value: unknown): FileResourceType {
   if (typeof value === "string" && resourceTypes.has(value as FileResourceType)) return value as FileResourceType;
@@ -113,6 +113,7 @@ export function createFilesRouter(
     const { database: db, session } = requireContext(database, response);
     const type = resourceType(queryText(request, "resourceType", true));
     const id = uuid(queryText(request, "resourceId", true), "El recurso");
+    if (type === "EMPLOYEE_DOCUMENT") throw new AuthServiceError(400, "EMPLOYEE_DOCUMENT_METADATA_REQUIRED", "Carga el documento desde el detalle del empleado e indica su tipo.");
     await authorizeFileResource(db, session, type, id, "write");
     const content = await receiveMultipartUpload(request, storageRoot);
     try {

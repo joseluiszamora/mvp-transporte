@@ -11,9 +11,9 @@ Diez módulos antes de distribución. Orden por dependencia, no por numeración 
 | TASK-005 | Roles y alcances | 004 | Integrada en `main`; aceptación funcional pendiente |
 | TASK-006 | Organizaciones empresas sucursales | 005 | Integrada en `main` por PR #19; aceptación funcional pendiente |
 | TASK-007 | Catálogos | 006 | Integrada en `main` por PR #20; aceptación funcional pendiente |
-| TASK-008 | Configuración | 007 | Implementada en `task/008-configuracion`; revisión técnica y aceptación funcional pendientes |
-| TASK-009 | Archivos privados | 008 | Implementada en `task/009-archivos`; revisión técnica y aceptación funcional pendientes |
-| TASK-010 | Personal | 009 | Pendiente |
+| TASK-008 | Configuración | 007 | Integrada en `main` por PR #23; aceptación funcional pendiente |
+| TASK-009 | Archivos privados | 008 | Integrada en `main` por PR #24; aceptación funcional pendiente |
+| TASK-010 | Personal | 009 | PR #25 abierta; CI #27 y revisión técnica pasaron; prueba manual/aceptación funcional pendientes |
 | TASK-011 | Consulta auditoría | 010 | Pendiente |
 | TASK-012 | Administración de correo | 011 | Pendiente |
 | TASK-013 | Consolidación y aceptación | 012 | Pendiente |

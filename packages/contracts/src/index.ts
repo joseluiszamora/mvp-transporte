@@ -283,7 +283,7 @@ export interface NumberSequence {
   updatedAt: string;
 }
 
-export type FileResourceType = "COMPANY_ATTACHMENT" | "BRANCH_ATTACHMENT";
+export type FileResourceType = "COMPANY_ATTACHMENT" | "BRANCH_ATTACHMENT" | "EMPLOYEE_PHOTO" | "EMPLOYEE_DOCUMENT";
 
 export interface FileScopeOption {
   resourceType: FileResourceType;
@@ -306,6 +306,75 @@ export interface StoredFile {
   bytes: number;
   createdAt: string;
   downloadUrl: string;
+}
+
+export interface EmployeeListItem {
+  id: string;
+  companyId: string;
+  internalCode: string;
+  firstNames: string;
+  lastNames: string;
+  position: { id: string; code: string; name: string } | null;
+  hireDate: string;
+  status: RecordStatus;
+  branches: Array<{ id: string; code: string; name: string }>;
+}
+
+export interface EmployeeDetails extends EmployeeListItem {
+  canReadPersonalData: boolean;
+  canReadLinkedUser: boolean;
+  canManageUserLink: boolean;
+  canUpdate: boolean;
+  canUpdateSharedFields: boolean;
+  canDeactivate: boolean;
+  canManagePersonalData: boolean;
+  canReadPhoto: boolean;
+  canManagePhoto: boolean;
+  canDeletePhoto: boolean;
+  canReadDocuments: boolean;
+  canDownloadDocuments: boolean;
+  canManageDocuments: boolean;
+  canDeleteDocuments: boolean;
+  personalData?: {
+    documentNumber: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+  };
+  linkedUser?: { id: string; displayName: string; email: string; membershipStatus: "INVITED" | "ACTIVE" | "SUSPENDED" } | null;
+  photoFileId?: string | null;
+}
+
+export interface EmployeePage extends PageResponse<EmployeeListItem> {}
+
+export interface EmployeeScopeOptions {
+  companies: Array<{
+    id: string;
+    legalName: string;
+    canCreate: boolean;
+    canUpdate: boolean;
+    branches: Array<{ id: string; code: string; name: string; canCreate: boolean; canUpdate: boolean }>;
+  }>;
+  positions: Array<{ id: string; code: string; name: string }>;
+  documentTypes: Array<{ id: string; code: string; name: string }>;
+  users: Array<{ id: string; displayName: string; email: string; membershipStatus: "INVITED" | "ACTIVE" | "SUSPENDED" }>;
+}
+
+export interface EmployeeDocumentItem {
+  id: string;
+  fileId: string;
+  type: { id: string; code: string; name: string };
+  originalName: string;
+  detectedMime: StoredFile["detectedMime"];
+  bytes: number;
+  issuedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface EmployeeDocumentsResponse {
+  items: EmployeeDocumentItem[];
+  canDownload: boolean;
 }
 
 export interface OrganizationMembershipStatusResponse {
