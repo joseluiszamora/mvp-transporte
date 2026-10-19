@@ -73,3 +73,9 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 - 16/10/2026: cada numeración se define por alcance, tipo documental y período `ALL`, `AAAA` o `AAAA-MM`; el período forma parte del número emitido y de la clave única. El rollover es explícito: se crea una numeración para el nuevo período, sin reinicio automático.
 - 16/10/2026: la identidad de empresa admite nombre, color hexadecimal y URL HTTPS sin credenciales, query ni fragmento. El servidor almacena la URL como dato y no descarga ni procesa el recurso.
 - 16/10/2026: los defaults de instalación se limitan a español, BOB y `America/La_Paz`; solo `PLATFORM_ADMIN` puede consultarlos o modificarlos. SMTP permanece en el módulo de correo y sus secretos no forman parte de `Setting`.
+
+## Implementación de TASK-009
+- 17/10/2026: el driver local guarda bytes bajo `FILE_STORAGE_PATH`, fuera de recursos estáticos; el despliegue local debe montar y respaldar ese volumen privado junto con PostgreSQL. Las claves de almacenamiento son UUID aleatorias; el nombre original se conserva solo como metadato.
+- 17/10/2026: los tipos registrados son `COMPANY_ATTACHMENT` y `BRANCH_ATTACHMENT`. Cada operación exige el permiso `files.*` aplicable además de `companies.*` o `branches.*` en el recurso recargado desde la base; ni un UUID ni un permiso genérico amplían el alcance.
+- 17/10/2026: los documentos de empleados quedan fuera del registro de enlaces hasta que ADM-05 cree el recurso y concrete su autorización. Rechazarlos ahora preserva el acceso personal restringido definido por seguridad sin adelantar el modelo de personal.
+- 17/10/2026: se permite PDF/JPEG/PNG/WEBP hasta 10 MiB y solo si coinciden extensión, MIME declarado y firma. Quitar un archivo desvincula y marca purga con 24 horas de gracia; el CLI de limpieza purga solo filas vencidas sin enlaces y bytes huérfanos/temporales vencidos, con evento de auditoría.

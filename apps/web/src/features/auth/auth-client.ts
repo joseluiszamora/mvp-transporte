@@ -31,6 +31,9 @@ import type {
   SettingItem,
   SettingScopeOptions,
   SettingScopeType,
+  FileResourceType,
+  FileScopeOption,
+  StoredFile,
 } from "@mvp-transporte/contracts";
 
 const csrfCookieName = "mvp_csrf";
@@ -253,6 +256,53 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return (await response.json()) as T;
 }
 
+function sendMultipartUpload(path: string, form: FormData, token: string, onProgress?: (loaded: number, total: number) => void): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `${getApiBaseUrl()}${path}`);
+    request.withCredentials = true;
+    request.setRequestHeader("Authorization", `Bearer ${token}`);
+    request.upload.onprogress = (event) => { if (event.lengthComputable) onProgress?.(event.loaded, event.total); };
+    request.onload = () => resolve({ status: request.status, body: request.responseText });
+    request.onerror = () => reject(new AuthClientError(0, "NETWORK_ERROR", "No fue posible completar la carga."));
+    request.onabort = () => reject(new AuthClientError(0, "UPLOAD_ABORTED", "La carga fue interrumpida."));
+    request.send(form);
+  });
+}
+
+export async function uploadMultipart<T>(path: string, file: File, onProgress?: (loaded: number, total: number) => void): Promise<T> {
+  if (!accessToken && !(await refreshSession())) throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
+  const tokenBeforeRequest = accessToken;
+  if (!tokenBeforeRequest) throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
+  const form = new FormData();
+  form.append("file", file, file.name);
+  let result = await sendMultipartUpload(path, form, tokenBeforeRequest, onProgress);
+  if (result.status === 401 && await refreshSession(tokenBeforeRequest) && accessToken) {
+    result = await sendMultipartUpload(path, form, accessToken, onProgress);
+  }
+  if (result.status < 200 || result.status >= 300) {
+    let body: { error?: { code?: string; message?: string } } | null = null;
+    try { body = JSON.parse(result.body) as { error?: { code?: string; message?: string } }; } catch { body = null; }
+    throw new AuthClientError(result.status, body?.error?.code ?? "REQUEST_FAILED", body?.error?.message ?? "No fue posible completar la carga.");
+  }
+  try { return JSON.parse(result.body) as T; } catch { throw new AuthClientError(result.status, "INVALID_RESPONSE", "La respuesta de la carga no es válida."); }
+}
+
+export async function downloadPrivateFile(path: string, fileName: string): Promise<void> {
+  if (!accessToken && !(await refreshSession())) throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
+  const response = await authorizedFetch(path, {}, true);
+  if (!response.ok) throw await readError(response);
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+}
+
 export async function publicRequest<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
@@ -466,6 +516,32 @@ export async function updateNumberSequence(sequenceId: string, input: { prefix: 
 
 export async function issueSequenceNumber(sequenceId: string): Promise<{ sequenceId: string; documentType: string; period: string; number: string }> {
   return apiRequest<{ sequenceId: string; documentType: string; period: string; number: string }>(`/settings/number-sequences/${encodeURIComponent(sequenceId)}/next`, { method: "POST", body: "{}" });
+}
+
+export async function listFileScopeOptions(input: { limit?: number; offset?: number; search?: string } = {}): Promise<PageResponse<FileScopeOption>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 100), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  return apiRequest<PageResponse<FileScopeOption>>(`/files/scope-options?${query.toString()}`);
+}
+
+export async function listFiles(input: { resourceType: FileResourceType; resourceId: string; limit?: number; offset?: number; search?: string }): Promise<PageResponse<StoredFile>> {
+  const query = new URLSearchParams({ resourceType: input.resourceType, resourceId: input.resourceId, limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  return apiRequest<PageResponse<StoredFile>>(`/files?${query.toString()}`);
+}
+
+export async function uploadPrivateFile(resource: Pick<FileScopeOption, "resourceType" | "resourceId">, file: File, onProgress?: (loaded: number, total: number) => void): Promise<StoredFile> {
+  const query = new URLSearchParams({ resourceType: resource.resourceType, resourceId: resource.resourceId });
+  const result = await uploadMultipart<{ item: StoredFile }>(`/files?${query.toString()}`, file, onProgress);
+  return result.item;
+}
+
+export async function deletePrivateFile(fileId: string): Promise<void> {
+  await apiRequest<void>(`/files/${encodeURIComponent(fileId)}`, { method: "DELETE" });
+}
+
+export async function downloadPrivateFileById(fileId: string, fileName: string): Promise<void> {
+  await downloadPrivateFile(`/files/${encodeURIComponent(fileId)}/content`, fileName);
 }
 
 export async function listRolePermissionCatalog(): Promise<PermissionCatalogItem[]> {

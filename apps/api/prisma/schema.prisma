@@ -79,6 +79,16 @@ enum EmailDeliveryOutcome {
   FAILED
 }
 
+enum FileStatus {
+  ACTIVE
+  DELETE_PENDING
+}
+
+enum FileResourceType {
+  COMPANY_ATTACHMENT
+  BRANCH_ATTACHMENT
+}
+
 model Organization {
   id          String             @id @default(uuid()) @db.Uuid
   name        String             @db.VarChar(160)
@@ -95,6 +105,7 @@ model Organization {
   settings     Setting[]
   businessHours BusinessHour[]
   numberSequences NumberSequence[]
+  files        File[]
 
   @@map("organizations")
 }
@@ -118,6 +129,7 @@ model Company {
   settings       Setting[]
   businessHours  BusinessHour[]
   numberSequences NumberSequence[]
+  files          File[]
 
   @@unique([id, organizationId], map: "companies_id_organization_id_key")
   @@index([organizationId, status], map: "companies_organization_status_idx")
@@ -141,6 +153,7 @@ model Branch {
   settings       Setting[]
   businessHours  BusinessHour[]
   numberSequences NumberSequence[]
+  files          File[]
 
   @@unique([id, companyId, organizationId], map: "branches_id_company_organization_key")
   @@unique([companyId, code], map: "branches_company_code_key")
@@ -164,6 +177,7 @@ model User {
   settingsUpdated Setting[] @relation("SettingUpdatedBy")
   businessHoursUpdated BusinessHour[] @relation("BusinessHourUpdatedBy")
   numberSequencesUpdated NumberSequence[] @relation("NumberSequenceUpdatedBy")
+  uploadedFiles File[] @relation("FileUploader")
 
   @@map("users")
 }
@@ -492,4 +506,42 @@ model NumberSequence {
   @@unique([branchId, documentType, period], where: raw("\"scope_type\" = 'BRANCH'"), map: "number_sequences_branch_key_key")
   @@index([organizationId, companyId, branchId, documentType], map: "number_sequences_scope_document_idx")
   @@map("number_sequences")
+}
+
+model File {
+  id                String           @id @default(uuid()) @db.Uuid
+  organizationId    String           @map("organization_id") @db.Uuid
+  companyId         String           @map("company_id") @db.Uuid
+  branchId          String?          @map("branch_id") @db.Uuid
+  storageKey        String           @unique(map: "files_storage_key_key") @map("storage_key") @db.VarChar(36)
+  originalName      String           @map("original_name") @db.VarChar(255)
+  detectedMime      String           @map("detected_mime") @db.VarChar(100)
+  bytes             BigInt
+  sha256            String           @db.Char(64)
+  status            FileStatus       @default(ACTIVE)
+  uploadedBy        String           @map("uploaded_by") @db.Uuid
+  deleteRequestedAt DateTime?        @map("delete_requested_at") @db.Timestamptz(6)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company           Company          @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  branch            Branch?          @relation(fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
+  uploader          User             @relation("FileUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  link              FileLink?
+
+  @@index([organizationId, companyId, branchId, status, createdAt], map: "files_scope_status_created_idx")
+  @@index([status, deleteRequestedAt], map: "files_cleanup_idx")
+  @@map("files")
+}
+
+model FileLink {
+  id           String           @id @default(uuid()) @db.Uuid
+  fileId       String           @unique(map: "file_links_file_id_key") @map("file_id") @db.Uuid
+  resourceType FileResourceType @map("resource_type")
+  resourceId   String           @map("resource_id") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  file         File             @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([resourceType, resourceId, createdAt], map: "file_links_resource_created_idx")
+  @@map("file_links")
 }

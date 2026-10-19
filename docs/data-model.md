@@ -23,8 +23,8 @@ Especificación conceptual: TASK-002 concreta Prisma y migraciones conservando i
 | NumberSequence | organization_id, company_id, branch_id?, document_type, period, next_value |
 | Catalog | id, code, name, description?, scope (`GLOBAL`/`ORGANIZATION`/`COMPANY`), organization_id?, company_id?, status, is_protected |
 | CatalogItem | id, catalog_id, code, name, description?, status; UUID estable para referencias históricas |
-| File | organization_id, company_id?, storage_key único, original_name, detected_mime, bytes, status, uploaded_by |
-| FileLink | file_id, resource_type, resource_id; política explícita por tipo |
+| File | organization_id, company_id, branch_id?, storage_key UUID único, original_name, detected_mime, bytes, sha256, status (`ACTIVE`/`DELETE_PENDING`), uploaded_by, delete_requested_at? |
+| FileLink | file_id único, resource_type (`COMPANY_ATTACHMENT`/`BRANCH_ATTACHMENT`), resource_id; trigger comprueba tipo y scope contra File |
 | AuditEvent | organization_id?, company_id?, branch_id?, actor_id?, action, resource_type/id, diff filtrado, request_id, created_at |
 | EmailTemplate | código conocido, subject/body, variables permitidas |
 | EmailOutbox | organization_id?, template, recipient, payload limitado, deduplication_key único, status, attempts, next_attempt_at |
@@ -36,3 +36,5 @@ No borrar físicamente empresas, sucursales o empleados referenciados. Archivos 
 Timestamps UTC; importes futuros decimales, nunca float. No usar catálogos editables para estados de seguridad internos. NIT es texto; no inventar validación oficial no documentada. Metadata JSON solo para datos extensibles, no para relaciones fundamentales.
 
 Los catálogos `GLOBAL` no tienen tenant/empresa y deben estar protegidos. Los de organización requieren `organization_id`; los de empresa requieren organización y una FK compuesta a una empresa de ese tenant. Índices únicos parciales separan el código global, el código por tenant y el código por empresa; las opciones son únicas por catálogo. API normaliza códigos a mayúsculas. Desactivar conserva filas; las FKs futuras a `CatalogItem` deben usar `RESTRICT`, y los módulos consumidores solo ofrecerán opciones activas de catálogos activos.
+
+El driver de archivos guarda el contenido en un volumen privado configurado por `FILE_STORAGE_PATH`; PostgreSQL conserva metadatos y un enlace explícito. `company_id` es obligatorio incluso para un adjunto de sucursal y las FKs compuestas garantizan que ambos pertenecen al mismo tenant. Los tipos de enlace se habilitan con su política de autorización; `EMPLOYEE_DOCUMENT` no se registra hasta implementar el recurso de ADM-05.

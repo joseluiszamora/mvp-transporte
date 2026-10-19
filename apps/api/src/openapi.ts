@@ -485,6 +485,58 @@ export const openApiDocument = {
         responses: { "200": { description: "Número emitido y auditado.", content: { "application/json": { schema: { $ref: "#/components/schemas/IssuedNumber" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/files/scope-options": {
+      get: {
+        summary: "Lista empresas y sucursales para las que los permisos de archivos y del recurso coinciden.", operationId: "listFileScopeOptions", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "search", schema: { type: "string", maxLength: 120 } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 100 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de recursos accesibles.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfFileScopeOptions" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/files": {
+      get: {
+        summary: "Lista adjuntos del recurso autorizado exacto.", operationId: "listFiles", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "resourceType", required: true, schema: { $ref: "#/components/schemas/FileResourceType" } },
+          { in: "query", name: "resourceId", required: true, schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "search", schema: { type: "string", maxLength: 120 } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de metadatos privados.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfFiles" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Carga un archivo privado al recurso exacto autorizado.", operationId: "uploadFile", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "resourceType", required: true, schema: { $ref: "#/components/schemas/FileResourceType" } },
+          { in: "query", name: "resourceId", required: true, schema: { type: "string", format: "uuid" } },
+        ],
+        requestBody: { required: true, content: { "multipart/form-data": { schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } }, additionalProperties: false } } } },
+        responses: { "201": { description: "Archivo privado guardado.", content: { "application/json": { schema: { $ref: "#/components/schemas/StoredFileResponse" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "413": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/files/{fileId}": {
+      get: {
+        summary: "Consulta metadatos de un archivo solo si el actor conserva acceso al recurso enlazado.", operationId: "getFileMetadata", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "fileId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Metadatos autorizados.", content: { "application/json": { schema: { $ref: "#/components/schemas/StoredFileResponse" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      delete: {
+        summary: "Quita el enlace autorizado y programa la purga tras 24 horas.", operationId: "requestFileDeletion", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "fileId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "204": { description: "El archivo dejó de estar disponible y será purgado tras el periodo de gracia." }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/files/{fileId}/content": {
+      get: {
+        summary: "Descarga en streaming un archivo privado tras autorizar su recurso.", operationId: "downloadFile", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "fileId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Contenido servido como adjunto con MIME detectado y no-store.", content: { "application/octet-stream": { schema: { type: "string", format: "binary" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/platform/organizations": {
       get: {
         summary: "Lista tenants para administración de plataforma.",
@@ -619,6 +671,34 @@ export const openApiDocument = {
       },
     },
     schemas: {
+      FileResourceType: { type: "string", enum: ["COMPANY_ATTACHMENT", "BRANCH_ATTACHMENT"] },
+      FileScopeOption: {
+        type: "object", additionalProperties: false,
+        required: ["resourceType", "resourceId", "companyId", "branchId", "label", "canRead", "canDownload", "canUpload", "canDelete"],
+        properties: {
+          resourceType: { $ref: "#/components/schemas/FileResourceType" }, resourceId: { type: "string", format: "uuid" },
+          companyId: { type: "string", format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" }, label: { type: "string" },
+          canRead: { type: "boolean" }, canDownload: { type: "boolean" }, canUpload: { type: "boolean" }, canDelete: { type: "boolean" },
+        },
+      },
+      PageOfFileScopeOptions: {
+        type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"],
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/FileScopeOption" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      StoredFile: {
+        type: "object", additionalProperties: false,
+        required: ["id", "resourceType", "resourceId", "originalName", "detectedMime", "bytes", "createdAt", "downloadUrl"],
+        properties: {
+          id: { type: "string", format: "uuid" }, resourceType: { $ref: "#/components/schemas/FileResourceType" }, resourceId: { type: "string", format: "uuid" },
+          originalName: { type: "string", maxLength: 255 }, detectedMime: { type: "string", enum: ["application/pdf", "image/jpeg", "image/png", "image/webp"] },
+          bytes: { type: "integer", minimum: 1, maximum: 10485760 }, createdAt: { type: "string", format: "date-time" }, downloadUrl: { type: "string" },
+        },
+      },
+      StoredFileResponse: { type: "object", additionalProperties: false, required: ["item"], properties: { item: { $ref: "#/components/schemas/StoredFile" } } },
+      PageOfFiles: {
+        type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"],
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/StoredFile" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
       LoginRequest: {
         type: "object",
         required: ["email", "password"],

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { delimiter, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const projectName = `mvp-integration-${process.pid}`;
@@ -562,6 +564,20 @@ async function apiRequest(baseUrl, path, options = {}) {
   return { response, body };
 }
 
+async function multipartFileRequest(baseUrl, path, options) {
+  const form = new FormData();
+  form.append("file", new Blob([options.content], { type: options.mime }), options.filename);
+  if (options.extraField) form.append("unexpected", options.extraField);
+  if (options.extraFile) form.append("extra", new Blob([options.content], { type: options.mime }), "extra.pdf");
+  const response = await fetch(`${baseUrl}/api/v1${path}`, {
+    method: "POST",
+    headers: { Origin: "http://127.0.0.1:5173", connection: "close", Authorization: `Bearer ${options.accessToken}` },
+    body: form,
+  });
+  const body = response.headers.get("content-type")?.includes("application/json") ? await response.json() : Buffer.from(await response.arrayBuffer());
+  return { response, body };
+}
+
 async function getMailpitText(httpPort, recipient, subjectPart) {
   const response = await fetch(`http://127.0.0.1:${httpPort}/api/v1/messages?start=0&limit=200`);
   assert.equal(response.status, 200, "Mailpit debe listar los mensajes de TASK-004.");
@@ -606,7 +622,7 @@ async function deliverQueuedAuthMessages(database, smtpPort, encryptionKey) {
   }
 }
 
-async function verifyRoleManagement(database, createApp) {
+async function verifyRoleManagement(database, createApp, fileStorageRoot) {
   const marker = randomUUID();
   const organizationResult = await database.query(
     "SELECT id FROM organizations WHERE name = 'Tenant de desarrollo A'",
@@ -625,6 +641,7 @@ async function verifyRoleManagement(database, createApp) {
   const branchId = branchResult.rows[0].id;
   const otherCompanyId = randomUUID();
   const otherBranchId = randomUUID();
+  const deniedBranchId = randomUUID();
   await database.query(
     `INSERT INTO companies (id, organization_id, legal_name, nit, status, updated_at)
      VALUES ($1::uuid, $2::uuid, $3, $4, 'ACTIVE', CURRENT_TIMESTAMP)`,
@@ -634,6 +651,11 @@ async function verifyRoleManagement(database, createApp) {
     `INSERT INTO branches (id, organization_id, company_id, code, name, status, updated_at)
      VALUES ($1::uuid, $2::uuid, $3::uuid, $4, 'Sucursal de prueba', 'ACTIVE', CURRENT_TIMESTAMP)`,
     [otherBranchId, organizationId, companyId, `OTHER-${marker.slice(0, 8)}`],
+  );
+  await database.query(
+    `INSERT INTO branches (id, organization_id, company_id, code, name, status, updated_at)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, $4, 'Sucursal sin permiso de prueba', 'ACTIVE', CURRENT_TIMESTAMP)`,
+    [deniedBranchId, organizationId, companyId, `DENIED-${marker.slice(0, 8)}`],
   );
 
   const adminId = randomUUID();
@@ -705,6 +727,7 @@ async function verifyRoleManagement(database, createApp) {
   const app = createApp({
     database,
     allowedOrigins: ["http://127.0.0.1:5173"],
+    fileStorageRoot,
     authSettings: settings,
     checkDatabase: async () => { await database.query("SELECT 1"); },
   });
@@ -800,6 +823,77 @@ async function verifyRoleManagement(database, createApp) {
     const tenantBLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: tenantBAdminEmail, password } });
     assert.equal(tenantBLogin.response.status, 200);
     const tenantBToken = tenantBLogin.body.accessToken;
+    const fileScopes = await apiRequest(baseUrl, "/files/scope-options?limit=100", { accessToken: adminToken });
+    assert.equal(fileScopes.response.status, 200, JSON.stringify(fileScopes.body));
+    assert.ok(fileScopes.body.items.some((item) => item.resourceType === "COMPANY_ATTACHMENT" && item.resourceId === companyId));
+    assert.ok(fileScopes.body.items.some((item) => item.resourceType === "BRANCH_ATTACHMENT" && item.resourceId === branchId));
+    const { resolveFileStorageRoot } = await import("../apps/api/dist/modules/files/file-storage.js");
+    assert.throws(() => resolveFileStorageRoot(resolve(repositoryRoot, "apps/web/public")), /fuera de apps\/web\/public/u);
+    const pdfContent = Buffer.from("%PDF-1.7\nfixture privado\n%%EOF\n");
+    const uploadedCompanyFile = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "factura-prueba.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(uploadedCompanyFile.response.status, 201, `El archivo válido se almacena y enlaza al recurso autorizado: ${JSON.stringify(uploadedCompanyFile.body)}`);
+    const companyFileId = uploadedCompanyFile.body.item.id;
+    assert.equal(uploadedCompanyFile.body.item.originalName, "factura-prueba.pdf");
+    assert.equal(uploadedCompanyFile.body.item.bytes, pdfContent.length);
+    const extraFieldUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "extra-campo.pdf", mime: "application/pdf", content: pdfContent, extraField: "rechazado",
+    });
+    assert.equal(extraFieldUpload.response.status, 400, "La carga rechaza campos adicionales al archivo.");
+    const extraFileUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "extra-archivo.pdf", mime: "application/pdf", content: pdfContent, extraFile: true,
+    });
+    assert.equal(extraFileUpload.response.status, 400, "La carga acepta un solo archivo.");
+    const listedCompanyFiles = await apiRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, { accessToken: adminToken });
+    assert.equal(listedCompanyFiles.response.status, 200);
+    assert.equal(listedCompanyFiles.body.total, 1);
+    const companyFileContent = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/${companyFileId}/content`, {
+      headers: { Authorization: `Bearer ${adminToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.equal(companyFileContent.status, 200);
+    assert.equal(companyFileContent.headers.get("content-disposition").startsWith("attachment;"), true);
+    assert.deepEqual(Buffer.from(await companyFileContent.arrayBuffer()), pdfContent);
+    const foreignFileMetadata = await apiRequest(baseUrl, `/files/${companyFileId}`, { accessToken: tenantBToken });
+    assert.equal(foreignFileMetadata.response.status, 404, "Los metadatos de un tenant ajeno no se enumeran.");
+    const foreignFileDownload = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/${companyFileId}/content`, {
+      headers: { Authorization: `Bearer ${tenantBToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.equal(foreignFileDownload.status, 404, "El contenido de un tenant ajeno no se descarga.");
+    const foreignResourceUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: tenantBToken, filename: "ajeno.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(foreignResourceUpload.response.status, 404, "No se puede adjuntar a una empresa de otro tenant.");
+    const personalDocumentUpload = await multipartFileRequest(baseUrl, `/files?resourceType=EMPLOYEE_DOCUMENT&resourceId=${randomUUID()}`, {
+      accessToken: adminToken, filename: "personal.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(personalDocumentUpload.response.status, 400, "Los tipos de enlace no registrados, incluidos documentos personales futuros, se rechazan.");
+    const mismatchedMimeUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "imagen.pdf", mime: "application/pdf", content: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    assert.equal(mismatchedMimeUpload.response.status, 400, "Extensión, MIME declarado y firma real deben coincidir.");
+    const unsafeNameUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "../salida.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(unsafeNameUpload.response.status, 400, "Los nombres con traversal se rechazan.");
+    const htmlUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "payload.html", mime: "text/html", content: Buffer.from("<html>"),
+    });
+    assert.equal(htmlUpload.response.status, 400, "HTML y MIME no permitido se rechazan.");
+    const oversizedUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: adminToken, filename: "grande.pdf", mime: "application/pdf", content: Buffer.alloc(10 * 1024 * 1024 + 1, 0x41),
+    });
+    assert.equal(oversizedUpload.response.status, 413, "La API limita el tamaño real a 10 MiB.");
+    const invalidPathDownload = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/%2e%2e%2fsecret/content`, {
+      headers: { Authorization: `Bearer ${adminToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.ok(invalidPathDownload.status === 400 || invalidPathDownload.status === 404, "La ruta con traversal no llega al filesystem.");
+    const uploadedBranchFile = await multipartFileRequest(baseUrl, `/files?resourceType=BRANCH_ATTACHMENT&resourceId=${branchId}`, {
+      accessToken: adminToken, filename: "sucursal.png", mime: "image/png", content: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    assert.equal(uploadedBranchFile.response.status, 201);
+    const deniedCompanyResource = await apiRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, { accessToken: tenantBToken });
+    assert.equal(deniedCompanyResource.response.status, 404);
     const settingScopeOptions = await apiRequest(baseUrl, "/settings/scope-options?limit=100", { accessToken: adminToken });
     assert.equal(settingScopeOptions.response.status, 200);
     assert.ok(settingScopeOptions.body.companies.some((item) => item.id === companyId));
@@ -1067,6 +1161,17 @@ async function verifyRoleManagement(database, createApp) {
     assert.equal(recipientMe.response.status, 200);
     assert.ok(recipientMe.body.permissions.includes("roles.assign"));
     assert.ok(recipientMe.body.permissions.includes("companies.read"));
+    const deniedFileList = await apiRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, { accessToken: recipientToken });
+    assert.equal(deniedFileList.response.status, 403, "Una cuenta sin permiso files.read no puede listar archivos.");
+    const deniedFileUpload = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: recipientToken, filename: "sin-permiso.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(deniedFileUpload.response.status, 403, "Una cuenta sin permiso files.upload no puede iniciar la carga.");
+    const genericFilesRole = await createRole(`Permisos genéricos de archivos ${marker}`, ["files.read", "files.upload", "files.download"]);
+    const genericFilesAssignment = await assign({ membershipId: recipientMembershipId, roleId: genericFilesRole.id, scopeType: "ORGANIZATION" });
+    assert.equal(genericFilesAssignment.response.status, 201);
+    const genericFilesCannotCrossResourcePolicy = await apiRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${otherCompanyId}`, { accessToken: recipientToken });
+    assert.equal(genericFilesCannotCrossResourcePolicy.response.status, 403, "files.read por sí solo no sustituye companies.read del recurso.");
     const scopedCompanies = await apiRequest(baseUrl, "/organizations/companies?limit=100", { accessToken: recipientToken });
     assert.equal(scopedCompanies.response.status, 200);
     assert.deepEqual(scopedCompanies.body.items.map((item) => item.id), [companyId], "Una autorización de empresa solo lista esa empresa.");
@@ -1092,6 +1197,35 @@ async function verifyRoleManagement(database, createApp) {
     assert.equal(settingsAtOtherBranch.response.status, 403, "La configuración de otra sucursal sigue denegada.");
     const settingsAtOtherCompany = await apiRequest(baseUrl, `/settings/effective?companyId=${otherCompanyId}`, { accessToken: recipientToken });
     assert.equal(settingsAtOtherCompany.response.status, 403, "El permiso de sucursal no habilita otra empresa.");
+    const fileBranchRole = await createRole(`Archivos de sucursal ${marker}`, ["files.read", "files.upload", "files.download", "files.delete", "branches.read", "branches.update"]);
+    const fileBranchAssignment = await assign({ membershipId: recipientMembershipId, roleId: fileBranchRole.id, scopeType: "BRANCH", companyId, branchId: otherBranchId });
+    assert.equal(fileBranchAssignment.response.status, 201);
+    const fileScopeOptions = await apiRequest(baseUrl, "/files/scope-options?limit=100", { accessToken: recipientToken });
+    assert.equal(fileScopeOptions.response.status, 200);
+    const branchFileScope = fileScopeOptions.body.items.find((item) => item.resourceType === "BRANCH_ATTACHMENT" && item.resourceId === otherBranchId);
+    assert.ok(branchFileScope?.canRead && branchFileScope?.canUpload && branchFileScope?.canDelete);
+    const companyFileScope = fileScopeOptions.body.items.find((item) => item.resourceType === "COMPANY_ATTACHMENT" && item.resourceId === companyId);
+    assert.ok(companyFileScope?.canRead);
+    assert.equal(companyFileScope?.canUpload, false, "Un permiso de sucursal no habilita cambios de archivos en la empresa.");
+    assert.ok(!fileScopeOptions.body.items.some((item) => item.resourceId === deniedBranchId), "Las opciones no revelan sucursales sin permiso del recurso.");
+    const fileWriteAtCompanyDenied = await multipartFileRequest(baseUrl, `/files?resourceType=COMPANY_ATTACHMENT&resourceId=${companyId}`, {
+      accessToken: recipientToken, filename: "empresa-denegada.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(fileWriteAtCompanyDenied.response.status, 403, "files.upload no amplía branches.update a companies.update.");
+    const fileListAtDeniedBranch = await apiRequest(baseUrl, `/files?resourceType=BRANCH_ATTACHMENT&resourceId=${deniedBranchId}`, { accessToken: recipientToken });
+    assert.equal(fileListAtDeniedBranch.response.status, 403, "Un permiso de sucursal no autoriza otra sucursal.");
+    const uploadedScopedBranchFile = await multipartFileRequest(baseUrl, `/files?resourceType=BRANCH_ATTACHMENT&resourceId=${otherBranchId}`, {
+      accessToken: recipientToken, filename: "alcance-sucursal.pdf", mime: "application/pdf", content: pdfContent,
+    });
+    assert.equal(uploadedScopedBranchFile.response.status, 201, "El rol de sucursal puede cargar solo en la sucursal autorizada.");
+    const scopedBranchDownload = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/${uploadedScopedBranchFile.body.item.id}/content`, {
+      headers: { Authorization: `Bearer ${recipientToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.equal(scopedBranchDownload.status, 200);
+    const wrongBranchDownload = await fetch(`http://127.0.0.1:${address.port}/api/v1/files/${uploadedScopedBranchFile.body.item.id}/content`, {
+      headers: { Authorization: `Bearer ${tenantBToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
+    });
+    assert.equal(wrongBranchDownload.status, 404);
 
     const removeOrganizationCatalogRead = await apiRequest(baseUrl, `/organizations/roles/${organizationReader.id}`, {
       method: "PATCH", accessToken: adminToken, body: { status: "INACTIVE" },
@@ -1205,7 +1339,43 @@ async function verifyRoleManagement(database, createApp) {
       [organizationId],
     );
     assert.equal(sequenceAudit.rows[0].total, 12, "Cada número emitido debe quedar auditado en su transacción.");
-    process.stdout.write("TASK-005/006/007/008 integration: aislamiento, configuración efectiva, horarios, numeración atómica, auditoría, roles y membresías correctos.\n");
+    const { cleanupOrphanedFiles } = await import("../apps/api/dist/modules/files/files-cleanup.js");
+    const { getStoredFilePath } = await import("../apps/api/dist/modules/files/file-storage.js");
+    const companyFileRow = await database.query("SELECT storage_key, status FROM files WHERE id = $1::uuid", [companyFileId]);
+    assert.equal(companyFileRow.rows[0]?.status, "ACTIVE");
+    const companyFilePath = getStoredFilePath(fileStorageRoot, companyFileRow.rows[0].storage_key);
+    const branchFileRow = await database.query("SELECT storage_key, status FROM files WHERE id = $1::uuid", [uploadedBranchFile.body.item.id]);
+    const branchFilePath = getStoredFilePath(fileStorageRoot, branchFileRow.rows[0].storage_key);
+    const deleteCompanyFile = await apiRequest(baseUrl, `/files/${companyFileId}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(deleteCompanyFile.response.status, 204);
+    const pendingCompanyFile = await database.query("SELECT status, delete_requested_at FROM files WHERE id = $1::uuid", [companyFileId]);
+    assert.equal(pendingCompanyFile.rows[0]?.status, "DELETE_PENDING");
+    assert.equal(existsSync(companyFilePath), true, "El periodo de gracia conserva temporalmente el archivo privado.");
+    const deletedFileHidden = await apiRequest(baseUrl, `/files/${companyFileId}`, { accessToken: adminToken });
+    assert.equal(deletedFileHidden.response.status, 404, "El archivo deja de estar disponible al quitar su enlace.");
+    await database.query("UPDATE files SET delete_requested_at = CURRENT_TIMESTAMP - INTERVAL '25 hours' WHERE id = $1::uuid", [companyFileId]);
+    const orphanKey = randomUUID();
+    const orphanPath = getStoredFilePath(fileStorageRoot, orphanKey);
+    await mkdir(dirname(orphanPath), { recursive: true });
+    await writeFile(orphanPath, Buffer.from("orphan"));
+    const expired = new Date(Date.now() - 25 * 60 * 60 * 1_000);
+    await utimes(orphanPath, expired, expired);
+    const temporaryPath = join(fileStorageRoot, ".tmp", `${randomUUID()}.tmp`);
+    await writeFile(temporaryPath, Buffer.from("temporary"));
+    await utimes(temporaryPath, expired, expired);
+    const cleanup = await cleanupOrphanedFiles(database, fileStorageRoot, { gracePeriodMs: 24 * 60 * 60 * 1_000 });
+    assert.deepEqual(cleanup, { removedRecords: 1, removedUntrackedFiles: 1, removedTemporaryFiles: 1 });
+    assert.equal(existsSync(companyFilePath), false, "La limpieza purga el contenido sin enlace después del periodo de gracia.");
+    assert.equal(existsSync(orphanPath), false, "La limpieza elimina un archivo físico sin metadatos tras el periodo de gracia.");
+    assert.equal(existsSync(temporaryPath), false, "La limpieza elimina temporales vencidos.");
+    assert.equal(existsSync(branchFilePath), true, "La limpieza no elimina archivos vinculados.");
+    const linkedFilesAfterCleanup = await database.query("SELECT count(*)::int AS total FROM file_links WHERE file_id = $1::uuid", [uploadedBranchFile.body.item.id]);
+    assert.equal(linkedFilesAfterCleanup.rows[0].total, 1);
+    const purgeAudit = await database.query("SELECT count(*)::int AS total FROM audit_events WHERE organization_id = $1::uuid AND action = 'FILE_PURGED'", [organizationId]);
+    assert.equal(purgeAudit.rows[0].total, 1, "La purga de metadatos queda auditada sin incluir nombre ni contenido.");
+    const fileAudit = await database.query("SELECT count(*)::int AS total FROM audit_events WHERE organization_id = $1::uuid AND action IN ('FILE_UPLOADED', 'FILE_DELETE_REQUESTED')", [organizationId]);
+    assert.ok(fileAudit.rows[0].total >= 3, "Las cargas y solicitudes de borrado quedan auditadas.");
+    process.stdout.write("TASK-005/006/007/008/009 integration: aislamiento, metadatos privados, autorización del recurso, MIME/tamaño/traversal, streaming y purga segura correctos.\n");
   } finally {
     await new Promise((resolveClose, reject) => server.close((error) => error ? reject(error) : resolveClose()));
   }
@@ -1699,6 +1869,7 @@ do {
 } while (hostPorts.mailpitHttp === hostPorts.postgres || hostPorts.mailpitHttp === hostPorts.mailpitSmtp);
 let server;
 let databasePool;
+const fileStorageRoot = await mkdtemp(join(tmpdir(), "mvp-transporte-files-"));
 let composeMayExist = false;
 
 try {
@@ -1719,7 +1890,7 @@ try {
   const { createDatabasePool } = await import("../apps/api/dist/database.js");
   databasePool = createDatabasePool(testDatabaseUrl);
   await verifyDataModel(databasePool);
-  await verifyRoleManagement(databasePool, createApp);
+  await verifyRoleManagement(databasePool, createApp, fileStorageRoot);
   await verifyAuthentication(databasePool, hostPorts.mailpitSmtp, hostPorts.mailpitHttp, createApp);
   await verifyAuditAndEmail(databasePool, hostPorts.mailpitSmtp, hostPorts.mailpitHttp);
   const app = createApp({
@@ -1748,6 +1919,7 @@ try {
     });
   }
   await databasePool?.end();
+  await rm(fileStorageRoot, { recursive: true, force: true });
   if (composeMayExist) {
     runDockerCompose(["down", "--remove-orphans"], hostPorts);
   }
