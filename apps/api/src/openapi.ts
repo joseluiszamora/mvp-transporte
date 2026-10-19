@@ -378,6 +378,113 @@ export const openApiDocument = {
         responses: { "204": { description: "Opción desactivada." }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/settings": {
+      get: {
+        summary: "Lista overrides de configuración del alcance exacto autorizado.",
+        operationId: "listSettings",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "companyId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "branchId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "search", schema: { type: "string", maxLength: 120 } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de overrides autorizados.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfSettings" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      put: {
+        summary: "Crea, actualiza o quita un override tipado en un scope permitido.",
+        operationId: "updateSetting",
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/SettingMutation" } } } },
+        responses: { "200": { description: "Override actualizado o eliminado.", content: { "application/json": { schema: { $ref: "#/components/schemas/SettingMutationResult" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/effective": {
+      get: {
+        summary: "Resuelve configuración efectiva de instalación a sucursal según la allowlist de cada clave.",
+        operationId: "getEffectiveSettings",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "companyId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "branchId", schema: { type: "string", format: "uuid" } },
+        ],
+        responses: { "200": { description: "Configuración efectiva autorizada.", content: { "application/json": { schema: { $ref: "#/components/schemas/EffectiveSettings" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/scope-options": {
+      get: {
+        summary: "Lista empresas y sucursales activas alcanzables por permisos efectivos de configuración.",
+        operationId: "listSettingsScopeOptions",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "companyId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "search", schema: { type: "string", maxLength: 120 } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 100 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Opciones autorizadas de alcance.", content: { "application/json": { schema: { $ref: "#/components/schemas/SettingsScopeOptions" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/installation": {
+      get: {
+        summary: "Lee defaults no secretos de instalación; requiere rol de plataforma.", operationId: "getInstallationSettings", security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Overrides de instalación.", content: { "application/json": { schema: { $ref: "#/components/schemas/InstallationSettings" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      put: {
+        summary: "Actualiza un default no secreto de instalación; SMTP permanece separado.", operationId: "updateInstallationSetting", security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/InstallationSettingMutation" } } } },
+        responses: { "200": { description: "Default de instalación actualizado o eliminado.", content: { "application/json": { schema: { $ref: "#/components/schemas/SettingMutationResult" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/business-hours": {
+      get: {
+        summary: "Devuelve los horarios efectivos de empresa o sucursal.", operationId: "getBusinessHours", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "companyId", required: true, schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "branchId", schema: { type: "string", format: "uuid" } },
+        ],
+        responses: { "200": { description: "Siete días ISO y hasta dos intervalos locales por día.", content: { "application/json": { schema: { $ref: "#/components/schemas/BusinessHours" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      put: {
+        summary: "Reemplaza los siete días de horarios de empresa o sucursal.", operationId: "replaceBusinessHours", security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/BusinessHoursMutation" } } } },
+        responses: { "200": { description: "Horario actualizado y auditado.", content: { "application/json": { schema: { $ref: "#/components/schemas/BusinessHoursMutationResult" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/number-sequences": {
+      get: {
+        summary: "Lista numeraciones en un alcance autorizado.", operationId: "listNumberSequences", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "companyId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "branchId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "search", schema: { type: "string", maxLength: 120 } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de numeraciones.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfNumberSequences" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Crea una numeración en organización, empresa o sucursal.", operationId: "createNumberSequence", security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/NumberSequenceMutation" } } } },
+        responses: { "201": { description: "Numeración creada.", content: { "application/json": { schema: { $ref: "#/components/schemas/NumberSequence" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/number-sequences/{sequenceId}": {
+      patch: {
+        summary: "Actualiza prefijo o relleno solo mientras no se emitió ningún número.", operationId: "updateNumberSequence", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "sequenceId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/NumberSequenceUpdate" } } } },
+        responses: { "200": { description: "Numeración actualizada.", content: { "application/json": { schema: { $ref: "#/components/schemas/NumberSequence" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/settings/number-sequences/{sequenceId}/next": {
+      post: {
+        summary: "Emite un número de forma atómica; el contador no retrocede.", operationId: "issueNumber", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "sequenceId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Número emitido y auditado.", content: { "application/json": { schema: { $ref: "#/components/schemas/IssuedNumber" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/platform/organizations": {
       get: {
         summary: "Lista tenants para administración de plataforma.",
@@ -601,6 +708,143 @@ export const openApiDocument = {
       CatalogScopeOptions: {
         type: "object", required: ["organization", "companies", "totalCompanies", "limit", "offset"], additionalProperties: false,
         properties: { organization: { type: "boolean" }, companies: { type: "array", items: { type: "object", required: ["id", "legalName"], additionalProperties: false, properties: { id: { type: "string", format: "uuid" }, legalName: { type: "string" } } } }, totalCompanies: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      Setting: {
+        type: "object", required: ["id", "scopeType", "organizationId", "companyId", "branchId", "key", "valueType", "value", "updatedAt"], additionalProperties: false,
+        properties: {
+          id: { type: "string", format: "uuid" }, scopeType: { type: "string", enum: ["INSTALLATION", "ORGANIZATION", "COMPANY", "BRANCH"] },
+          organizationId: { type: ["string", "null"], format: "uuid" }, companyId: { type: ["string", "null"], format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" },
+          key: { type: "string", enum: ["locale", "currency", "timeZone", "identity.name", "identity.logoUrl", "identity.brandColor"] },
+          valueType: { type: "string", const: "STRING" }, value: { type: "string" }, updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      EffectiveSetting: {
+        type: "object", required: ["key", "valueType", "value", "sourceScopeType", "sourceOrganizationId", "sourceCompanyId", "sourceBranchId", "updatedAt"], additionalProperties: false,
+        properties: {
+          key: { type: "string", enum: ["locale", "currency", "timeZone", "identity.name", "identity.logoUrl", "identity.brandColor"] },
+          valueType: { type: "string", const: "STRING" }, value: { type: ["string", "null"] },
+          sourceScopeType: { type: ["string", "null"], enum: ["INSTALLATION", "ORGANIZATION", "COMPANY", "BRANCH", null] },
+          sourceOrganizationId: { type: ["string", "null"], format: "uuid" }, sourceCompanyId: { type: ["string", "null"], format: "uuid" }, sourceBranchId: { type: ["string", "null"], format: "uuid" },
+          updatedAt: { type: ["string", "null"], format: "date-time" },
+        },
+      },
+      EffectiveSettings: {
+        type: "object", required: ["target", "items"], additionalProperties: false,
+        properties: {
+          target: { type: "object", required: ["scopeType", "organizationId", "companyId", "branchId"], additionalProperties: false, properties: { scopeType: { type: "string", enum: ["ORGANIZATION", "COMPANY", "BRANCH"] }, organizationId: { type: "string", format: "uuid" }, companyId: { type: ["string", "null"], format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" } } },
+          items: { type: "array", items: { $ref: "#/components/schemas/EffectiveSetting" } },
+        },
+      },
+      PageOfSettings: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/Setting" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      SettingMutationResult: {
+        type: "object", required: ["item", "deleted"], additionalProperties: false,
+        properties: { item: { anyOf: [{ $ref: "#/components/schemas/Setting" }, { type: "null" }] }, deleted: { type: "boolean" } },
+      },
+      SettingsScopeOptions: {
+        type: "object", required: ["organization", "companies", "totalCompanies", "limit", "offset"], additionalProperties: false,
+        properties: {
+          organization: { type: "object", required: ["canRead", "canUpdate"], additionalProperties: false, properties: { canRead: { type: "boolean" }, canUpdate: { type: "boolean" } } },
+          companies: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["id", "legalName", "canRead", "canUpdate", "branches"],
+              additionalProperties: false,
+              properties: {
+                id: { type: "string", format: "uuid" },
+                legalName: { type: "string" },
+                canRead: { type: "boolean" },
+                canUpdate: { type: "boolean" },
+                branches: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: ["id", "code", "name", "canRead", "canUpdate"],
+                    additionalProperties: false,
+                    properties: {
+                      id: { type: "string", format: "uuid" },
+                      code: { type: "string" },
+                      name: { type: "string" },
+                      canRead: { type: "boolean" },
+                      canUpdate: { type: "boolean" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          totalCompanies: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" },
+        },
+      },
+      InstallationSettings: {
+        type: "object", required: ["items"], additionalProperties: false, properties: { items: { type: "array", items: { $ref: "#/components/schemas/Setting" } } },
+      },
+      SettingMutation: {
+        type: "object", required: ["scopeType", "key", "value"], additionalProperties: false,
+        properties: {
+          scopeType: { type: "string", enum: ["ORGANIZATION", "COMPANY", "BRANCH"] }, companyId: { type: "string", format: "uuid" }, branchId: { type: "string", format: "uuid" },
+          key: { type: "string", enum: ["locale", "currency", "timeZone", "identity.name", "identity.logoUrl", "identity.brandColor"] }, value: { type: ["string", "null"] },
+        },
+      },
+      InstallationSettingMutation: {
+        type: "object", required: ["key", "value"], additionalProperties: false,
+        properties: { key: { type: "string", enum: ["locale", "currency", "timeZone"] }, value: { type: ["string", "null"] } },
+      },
+      BusinessHourInterval: {
+        type: "object", required: ["start", "end"], additionalProperties: false,
+        properties: { start: { type: "string", pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" }, end: { type: "string", pattern: "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$" } },
+      },
+      BusinessHourDay: {
+        type: "object", required: ["weekday", "intervals"], additionalProperties: false,
+        properties: { weekday: { type: "integer", minimum: 1, maximum: 7 }, intervals: { type: "array", maxItems: 2, items: { $ref: "#/components/schemas/BusinessHourInterval" } }, sourceScopeType: { type: ["string", "null"], enum: ["COMPANY", "BRANCH", null] }, updatedAt: { type: ["string", "null"], format: "date-time" } },
+      },
+      BusinessHours: {
+        type: "object", required: ["target", "items"], additionalProperties: false,
+        properties: { target: { type: "object", required: ["scopeType", "organizationId", "companyId", "branchId"], additionalProperties: false, properties: { scopeType: { type: "string", enum: ["COMPANY", "BRANCH"] }, organizationId: { type: "string", format: "uuid" }, companyId: { type: "string", format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" } } }, items: { type: "array", minItems: 7, maxItems: 7, items: { $ref: "#/components/schemas/BusinessHourDay" } } },
+      },
+      BusinessHoursMutationResult: {
+        type: "object", required: ["items"], additionalProperties: false,
+        properties: { items: { type: "array", minItems: 7, maxItems: 7, items: { $ref: "#/components/schemas/BusinessHourDay" } } },
+      },
+      BusinessHoursMutation: {
+        type: "object", required: ["companyId", "days"], additionalProperties: false,
+        properties: {
+          companyId: { type: "string", format: "uuid" },
+          branchId: { type: "string", format: "uuid" },
+          days: {
+            type: "array", minItems: 7, maxItems: 7,
+            items: {
+              type: "object", required: ["weekday", "intervals"], additionalProperties: false,
+              properties: {
+                weekday: { type: "integer", minimum: 1, maximum: 7 },
+                intervals: { type: "array", maxItems: 2, items: { $ref: "#/components/schemas/BusinessHourInterval" } },
+              },
+            },
+          },
+        },
+      },
+      NumberSequence: {
+        type: "object", required: ["id", "scopeType", "organizationId", "companyId", "branchId", "documentType", "period", "prefix", "padding", "nextValue", "updatedAt"], additionalProperties: false,
+        properties: { id: { type: "string", format: "uuid" }, scopeType: { type: "string", enum: ["ORGANIZATION", "COMPANY", "BRANCH"] }, organizationId: { type: "string", format: "uuid" }, companyId: { type: ["string", "null"], format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" }, documentType: { type: "string" }, period: { type: "string" }, prefix: { type: "string" }, padding: { type: "integer" }, nextValue: { type: "string" }, updatedAt: { type: "string", format: "date-time" } },
+      },
+      NumberSequenceMutation: {
+        type: "object", required: ["documentType", "period", "prefix", "padding"], additionalProperties: false,
+        properties: { companyId: { type: "string", format: "uuid" }, branchId: { type: "string", format: "uuid" }, documentType: { type: "string", minLength: 1, maxLength: 60 }, period: { type: "string", pattern: "^(ALL|[0-9]{4}(-[0-9]{2})?)$" }, prefix: { type: "string", maxLength: 24 }, padding: { type: "integer", minimum: 0, maximum: 12 } },
+      },
+      NumberSequenceUpdate: {
+        type: "object", minProperties: 1, additionalProperties: false,
+        properties: { prefix: { type: "string", maxLength: 24 }, padding: { type: "integer", minimum: 0, maximum: 12 } },
+      },
+      PageOfNumberSequences: {
+        type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,
+        properties: { items: { type: "array", items: { $ref: "#/components/schemas/NumberSequence" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } },
+      },
+      IssuedNumber: {
+        type: "object", required: ["sequenceId", "documentType", "period", "number"], additionalProperties: false,
+        properties: { sequenceId: { type: "string", format: "uuid" }, documentType: { type: "string" }, period: { type: "string" }, number: { type: "string" } },
       },
       PageOfCatalogs: {
         type: "object", required: ["items", "total", "limit", "offset"], additionalProperties: false,

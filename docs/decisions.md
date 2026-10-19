@@ -66,3 +66,10 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 - 15/10/2026: los catálogos tienen alcances `GLOBAL`, `ORGANIZATION` y `COMPANY`. Los globales son protegidos y de solo lectura para clientes; la gestión de catálogos propios exige `catalogs.manage` en el mismo alcance. Los permisos de sucursal no se amplían a una empresa porque el catálogo no tiene alcance sucursal.
 - 15/10/2026: la migración crea catálogos globales protegidos de tipos de documento y cargos con opciones generales, no específicas de transporte. La organización o empresa puede crear catálogos propios incluso con el mismo código porque la unicidad es por scope; las opciones son únicas dentro de su catálogo.
 - 15/10/2026: los códigos se normalizan a mayúsculas y el código de catálogo es inmutable tras crearlo; las bajas son lógicas y conservan IDs para referencias. Una opción no se ofrece para nuevos registros si el catálogo padre está inactivo. La migración y el seed se validan en la base desechable; no se modifica la base persistente local.
+
+## Implementación de TASK-008
+
+- 16/10/2026: los horarios usan días ISO (lunes=1 a domingo=7), hasta dos intervalos locales por día, sin cruce de medianoche ni solapamiento. Un horario de sucursal reemplaza la semana completa; mientras no exista, se hereda el de la empresa.
+- 16/10/2026: cada numeración se define por alcance, tipo documental y período `ALL`, `AAAA` o `AAAA-MM`; el período forma parte del número emitido y de la clave única. El rollover es explícito: se crea una numeración para el nuevo período, sin reinicio automático.
+- 16/10/2026: la identidad de empresa admite nombre, color hexadecimal y URL HTTPS sin credenciales, query ni fragmento. El servidor almacena la URL como dato y no descarga ni procesa el recurso.
+- 16/10/2026: los defaults de instalación se limitan a español, BOB y `America/La_Paz`; solo `PLATFORM_ADMIN` puede consultarlos o modificarlos. SMTP permanece en el módulo de correo y sus secretos no forman parte de `Setting`.
