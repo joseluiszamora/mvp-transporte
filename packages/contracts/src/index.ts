@@ -76,6 +76,24 @@ export interface PageResponse<T> {
   offset: number;
 }
 
+export type AuditActorType = "USER" | "SYSTEM";
+
+export interface AuditEventSummary {
+  id: string;
+  companyId: string | null;
+  branchId: string | null;
+  actorId: string | null;
+  actorType: AuditActorType;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  requestId: string;
+  createdAt: string;
+}
+
+export interface AuditEventDetails extends AuditEventSummary {
+  diff: { before?: Record<string, unknown> | null; after?: Record<string, unknown> | null } | null;
+}
 export type RoleStatus = "ACTIVE" | "INACTIVE";
 export type RoleScopeType = "ORGANIZATION" | "COMPANY" | "BRANCH";
 

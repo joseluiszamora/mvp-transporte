@@ -5,7 +5,7 @@ type Transaction = Pick<PoolClient, "query">;
 type AuditScalar = string | number | boolean | null;
 type AuditValue = AuditScalar | AuditValue[] | { [key: string]: AuditValue };
 
-const sensitiveField = /(?:password|token|secret|credential|authorization|cookie|smtp|document|filecontent|filepath|rawbody)/iu;
+const sensitiveField = /(?:password|token|secret|(?:api|private)[_.-]?key|credential|authorization|cookie|smtp|document|file|content|path|rawbody|email|phone|address|contact|personal|(?:^|_)nit(?:_|$)|tax.?id)/iu;
 const maximumDiffBytes = 16_384;
 const maximumDepth = 4;
 const maximumEntries = 50;
@@ -78,6 +78,19 @@ function sanitizeValue(value: unknown, depth: number): AuditValue | undefined {
   return undefined;
 }
 
+export function sanitizeStoredAuditDiff(value: unknown): AuditValue | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const sanitized: Record<string, AuditValue> = {};
+  for (const key of ["before", "after"] as const) {
+    if (!Object.hasOwn(source, key)) continue;
+    const item = sanitizeValue(source[key], 0);
+    if (item === null || (typeof item === "object" && !Array.isArray(item))) sanitized[key] = item;
+  }
+  if (Object.keys(sanitized).length === 0) return null;
+  if (Buffer.byteLength(JSON.stringify(sanitized), "utf8") > maximumDiffBytes) return null;
+  return sanitized;
+}
 function sanitizeDiff(input: AppendAuditEventInput): AuditValue | null {
   const diff: Record<string, AuditValue> = {};
   if (input.before !== undefined) {

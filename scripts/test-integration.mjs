@@ -1158,6 +1158,8 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     const recipientLogin = await apiRequest(baseUrl, "/auth/login", { method: "POST", body: { email: recipientEmail, password } });
     assert.equal(recipientLogin.response.status, 200);
     const recipientToken = recipientLogin.body.accessToken;
+    const deniedAuditRead = await apiRequest(baseUrl, "/audit", { accessToken: recipientToken });
+    assert.equal(deniedAuditRead.response.status, 403, "La membresía sin audit.read no puede consultar eventos.");
     const recipientMe = await apiRequest(baseUrl, "/auth/me", { accessToken: recipientToken });
     assert.equal(recipientMe.response.status, 200);
     assert.ok(recipientMe.body.permissions.includes("roles.assign"));
@@ -1334,6 +1336,82 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
       headers: { Authorization: `Bearer ${tenantBToken}`, Origin: "http://127.0.0.1:5173", connection: "close" },
     });
     assert.equal(wrongBranchDownload.status, 404);
+    const branchAuditRole = await createRole(`Auditoría de sucursal ${marker}`, ["audit.read"]);
+    const branchAuditAssignment = await assign({ membershipId: recipientMembershipId, roleId: branchAuditRole.id, scopeType: "BRANCH", companyId, branchId: otherBranchId });
+    assert.equal(branchAuditAssignment.response.status, 201);
+    const branchRoleAssignmentAudit = await apiRequest(baseUrl, `/audit?resourceType=RoleAssignment&action=ROLE_ASSIGNED&resourceId=${branchAuditAssignment.body.id}`, { accessToken: recipientToken });
+    assert.equal(branchRoleAssignmentAudit.response.status, 200);
+    assert.ok(branchRoleAssignmentAudit.body.items.some((event) => event.branchId === otherBranchId), "Los cambios de permisos incluyen su alcance de sucursal.");
+    const { appendAuditEvent } = await import("../apps/api/dist/modules/audit/audit-service.js");
+    const legacyBranchAssignmentAuditId = await appendAuditEvent(database, {
+      organizationId, actor: { type: "USER", userId: adminId }, action: "AUDIT_LEGACY_BRANCH_ASSIGNMENT",
+      resourceType: "RoleAssignment", resourceId: randomUUID(), requestId: `task011-legacy-branch-${marker}`,
+      after: { scopeType: "BRANCH", companyId, branchId: otherBranchId },
+    });
+    const legacyBranchAssignmentDetail = await apiRequest(baseUrl, `/audit/${legacyBranchAssignmentAuditId}`, { accessToken: recipientToken });
+    assert.equal(legacyBranchAssignmentDetail.response.status, 200, "Eventos históricos pueden filtrarse por sucursal usando el alcance guardado en el diff.");
+    const sanitizedAuditId = await appendAuditEvent(database, {
+      organizationId, companyId, branchId: otherBranchId, actor: { type: "USER", userId: recipientId },
+      action: "AUDIT_SANITIZATION_CHECK", resourceType: "AuditTest", resourceId: marker, requestId: `task011-${marker}`,
+      before: { status: "ACTIVE", password: "audit-private-password", apiKey: "audit-private-api-key", email: "audit-private@example.test", address: "audit-private-address", nit: "audit-private-nit", documentNumber: "audit-private-document" },
+      after: { status: "INACTIVE", safeCount: 2 },
+    });
+    const branchAuditPage = await apiRequest(baseUrl, "/audit?resourceType=File&action=FILE_UPLOADED", { accessToken: recipientToken });
+    assert.equal(branchAuditPage.response.status, 200);
+    assert.ok(branchAuditPage.body.items.some((event) => event.resourceId === uploadedScopedBranchFile.body.item.id && event.branchId === otherBranchId), "El auditor de sucursal ve cargas del ámbito autorizado.");
+    assert.ok(!branchAuditPage.body.items.some((event) => event.resourceId === uploadedBranchFile.body.item.id), "El auditor de sucursal no recibe el archivo de otra sucursal.");
+    const branchAuditDetail = await apiRequest(baseUrl, `/audit/${sanitizedAuditId}`, { accessToken: recipientToken });
+    assert.equal(branchAuditDetail.response.status, 200);
+    const branchAuditJson = JSON.stringify(branchAuditDetail.body);
+    assert.match(branchAuditJson, /safeCount/u);
+    assert.doesNotMatch(branchAuditJson, /audit-private-password|audit-private-api-key|audit-private@example\.test|audit-private-address|audit-private-nit|audit-private-document/u, "La consulta vuelve a filtrar secretos y datos sensibles del diff.");
+    assert.equal(branchAuditPage.response.headers.get("cache-control"), "no-store, private", "El historial no debe almacenarse en caché.");
+    const legacyAuditId = randomUUID();
+    await database.query(
+      `INSERT INTO audit_events (id, organization_id, company_id, branch_id, actor_id, actor_type, action, resource_type, resource_id, diff, request_id)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, 'USER'::"AuditActorType", 'AUDIT_LEGACY_SANITIZATION_CHECK', 'AuditTest', $6, $7::jsonb, $8)`,
+      [legacyAuditId, organizationId, companyId, otherBranchId, recipientId, marker,
+        JSON.stringify({ after: { safeLabel: "visible", password: "legacy-private-password", email: "legacy-private@example.test", nested: { accessToken: "legacy-private-token" }, filePath: "legacy-private-path" } }),
+        `task011-legacy-${marker}`],
+    );
+    const legacyAuditDetail = await apiRequest(baseUrl, `/audit/${legacyAuditId}`, { accessToken: recipientToken });
+    assert.equal(legacyAuditDetail.response.status, 200);
+    const legacyAuditJson = JSON.stringify(legacyAuditDetail.body);
+    assert.match(legacyAuditJson, /safeLabel/u);
+    assert.doesNotMatch(legacyAuditJson, /legacy-private-password|legacy-private@example\.test|legacy-private-token|legacy-private-path/u, "La lectura filtra también valores sensibles de eventos históricos.");
+    const actorAuditFilter = await apiRequest(baseUrl, `/audit?actorId=${recipientId}&action=AUDIT_SANITIZATION_CHECK`, { accessToken: recipientToken });
+    assert.equal(actorAuditFilter.response.status, 200);
+    assert.equal(actorAuditFilter.body.total, 1, "Los filtros de actor y acción aplican al total antes de paginar.");
+    const futureAuditFilter = await apiRequest(baseUrl, `/audit?from=${encodeURIComponent(new Date(Date.now() + 86_400_000).toISOString())}`, { accessToken: recipientToken });
+    assert.equal(futureAuditFilter.response.status, 200);
+    assert.equal(futureAuditFilter.body.total, 0);
+    const invalidAuditDate = await apiRequest(baseUrl, "/audit?from=2026-02-31T00%3A00%3A00Z", { accessToken: recipientToken });
+    assert.equal(invalidAuditDate.response.status, 400);
+    const invalidAuditPageSize = await apiRequest(baseUrl, "/audit?limit=101", { accessToken: recipientToken });
+    assert.equal(invalidAuditPageSize.response.status, 400, "La paginación tiene límites de servidor.");
+    const foreignBranchAudit = await database.query("SELECT id FROM audit_events WHERE resource_id = $1 AND action = 'FILE_UPLOADED' LIMIT 1", [uploadedBranchFile.body.item.id]);
+    assert.ok(foreignBranchAudit.rows[0]);
+    const deniedBranchAuditDetail = await apiRequest(baseUrl, `/audit/${foreignBranchAudit.rows[0].id}`, { accessToken: recipientToken });
+    assert.equal(deniedBranchAuditDetail.response.status, 404, "El detalle de otra sucursal se oculta para no enumerar eventos.");
+    const companyAuditRole = await createRole(`Auditoría de empresa ${marker}`, ["audit.read"]);
+    const companyAuditAssignment = await assign({ membershipId: recipientMembershipId, roleId: companyAuditRole.id, scopeType: "COMPANY", companyId });
+    assert.equal(companyAuditAssignment.response.status, 201);
+    const legacyCompanyAuditId = await appendAuditEvent(database, {
+      organizationId, actor: { type: "USER", userId: adminId }, action: "AUDIT_LEGACY_COMPANY_SCOPE",
+      resourceType: "Company", resourceId: companyId, requestId: `task011-legacy-company-${marker}`,
+    });
+    const legacyCompanyAuditDetail = await apiRequest(baseUrl, `/audit/${legacyCompanyAuditId}`, { accessToken: recipientToken });
+    assert.equal(legacyCompanyAuditDetail.response.status, 200, "Eventos históricos de creación de empresa se filtran por el ID de recurso para un auditor de empresa.");
+    const removeCompanyAuditAssignment = await apiRequest(baseUrl, `/organizations/role-assignments/${companyAuditAssignment.body.id}`, { method: "DELETE", accessToken: adminToken });
+    assert.equal(removeCompanyAuditAssignment.response.status, 204);
+    const tenantAuditEventId = await appendAuditEvent(database, {
+      organizationId: tenantBId, actor: { type: "USER", userId: tenantBAdminId }, action: "TENANT_B_AUDIT_FIXTURE",
+      resourceType: "AuditTest", resourceId: marker, requestId: `task011-tenant-b-${marker}`,
+    });
+    const foreignTenantAuditDetail = await apiRequest(baseUrl, `/audit/${tenantAuditEventId}`, { accessToken: adminToken });
+    assert.equal(foreignTenantAuditDetail.response.status, 404, "Un evento de otro tenant no se puede consultar por ID.");
+    const auditMutationRejected = await apiRequest(baseUrl, `/audit/${sanitizedAuditId}`, { method: "PATCH", accessToken: adminToken, body: { action: "tampered" } });
+    assert.equal(auditMutationRejected.response.status, 404, "La API de auditoría no expone operaciones de edición.");
 
     const removeOrganizationCatalogRead = await apiRequest(baseUrl, `/organizations/roles/${organizationReader.id}`, {
       method: "PATCH", accessToken: adminToken, body: { status: "INACTIVE" },
