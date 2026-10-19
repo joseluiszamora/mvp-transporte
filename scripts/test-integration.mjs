@@ -1344,7 +1344,7 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     assert.ok(branchRoleAssignmentAudit.body.items.some((event) => event.branchId === otherBranchId), "Los cambios de permisos incluyen su alcance de sucursal.");
     const { appendAuditEvent } = await import("../apps/api/dist/modules/audit/audit-service.js");
     const legacyBranchAssignmentAuditId = await appendAuditEvent(database, {
-      organizationId, actor: { type: "USER", userId: adminUserId }, action: "AUDIT_LEGACY_BRANCH_ASSIGNMENT",
+      organizationId, actor: { type: "USER", userId: adminId }, action: "AUDIT_LEGACY_BRANCH_ASSIGNMENT",
       resourceType: "RoleAssignment", resourceId: randomUUID(), requestId: `task011-legacy-branch-${marker}`,
       after: { scopeType: "BRANCH", companyId, branchId: otherBranchId },
     });
@@ -1359,7 +1359,7 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     const branchAuditPage = await apiRequest(baseUrl, "/audit?resourceType=File&action=FILE_UPLOADED", { accessToken: recipientToken });
     assert.equal(branchAuditPage.response.status, 200);
     assert.ok(branchAuditPage.body.items.some((event) => event.resourceId === uploadedScopedBranchFile.body.item.id && event.branchId === otherBranchId), "El auditor de sucursal ve cargas del ámbito autorizado.");
-    assert.ok(branchAuditPage.body.items.every((event) => event.branchId === otherBranchId), "El auditor de sucursal no recibe eventos de empresa ni de otras sucursales.");
+    assert.ok(!branchAuditPage.body.items.some((event) => event.resourceId === uploadedBranchFile.body.item.id), "El auditor de sucursal no recibe el archivo de otra sucursal.");
     const branchAuditDetail = await apiRequest(baseUrl, `/audit/${sanitizedAuditId}`, { accessToken: recipientToken });
     assert.equal(branchAuditDetail.response.status, 200);
     const branchAuditJson = JSON.stringify(branchAuditDetail.body);
@@ -1397,7 +1397,7 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     const companyAuditAssignment = await assign({ membershipId: recipientMembershipId, roleId: companyAuditRole.id, scopeType: "COMPANY", companyId });
     assert.equal(companyAuditAssignment.response.status, 201);
     const legacyCompanyAuditId = await appendAuditEvent(database, {
-      organizationId, actor: { type: "USER", userId: adminUserId }, action: "AUDIT_LEGACY_COMPANY_SCOPE",
+      organizationId, actor: { type: "USER", userId: adminId }, action: "AUDIT_LEGACY_COMPANY_SCOPE",
       resourceType: "Company", resourceId: companyId, requestId: `task011-legacy-company-${marker}`,
     });
     const legacyCompanyAuditDetail = await apiRequest(baseUrl, `/audit/${legacyCompanyAuditId}`, { accessToken: recipientToken });

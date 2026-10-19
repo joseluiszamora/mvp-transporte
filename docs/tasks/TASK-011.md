@@ -16,13 +16,13 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 
 ## Avance técnico (18/10/2026)
 - Implementado en código: endpoints GET de lista y detalle, filtrado por tenant y `audit.read`, paginación, sanitización de diferencias y panel web ADM-07. Sin migración de datos.
-- Pruebas de integración implementadas para dos tenants y alcances de sucursal, usuario sin permiso, filtros, detalle, sanitización histórica y lectura/escritura sin edición. La ejecución local está bloqueada por el daemon Docker ausente.
+- Pruebas de integración implementadas para dos tenants y alcances de sucursal, usuario sin permiso, filtros, detalle, sanitización histórica y lectura/escritura sin edición. La ejecución local pasó con PostgreSQL y Mailpit desechables tras activar Docker Desktop.
 - Pendiente de decisión del propietario: retención/purga (ADM-07 propone 365 días; decisions.md no aprueba mínimo) y visibilidad de eventos de empleado para auditoría limitada a sucursal.
 - La Issue #11 permanece abierta. No declarar la tarea aceptada hasta completar decisiones, validación técnica y aceptación funcional.
-### Validación local (18/10/2026)
+### Validación local (19/10/2026)
 - `npm run lint`: pasó sin advertencias.
 - `npm run typecheck`: pasó para contracts, API y web.
 - `npm run test`: pasó, 9/9.
 - `npm run build`: pasó; Vite informó un bundle web de 723.45 kB, sobre el umbral de 500 kB.
-- `npm run test:integration`: no ejecutó pruebas porque Docker no pudo abrir `npipe:////./pipe/dockerDesktopLinuxEngine`; los servicios desechables no iniciaron. No se usó la base persistente local.
-- Pendientes: integración CI de esta rama, prueba manual de UI, decisiones de retención y de visibilidad de eventos de empleado por sucursal, y aceptación funcional del propietario.
+- `npm run test:integration`: pasó con PostgreSQL/Mailpit desechables; aplicó las siete migraciones a la base efímera y completó la API. No se usó la base persistente local.
+- Pendientes: CI de PR #26 (el workflow solo se dispara hacia `main` y este PR está apilado en `task/010-personal`), prueba manual de UI, decisiones de retención y de visibilidad de eventos de empleado por sucursal, y aceptación funcional del propietario.

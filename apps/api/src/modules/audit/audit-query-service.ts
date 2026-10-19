@@ -81,7 +81,7 @@ const visibilitySql = `(
   ))
   OR (event.resource_type = 'File' AND EXISTS (
     SELECT 1 FROM file_links AS link
-    JOIN employees AS employee ON employee.id::text = link.resource_id AND employee.organization_id = event.organization_id
+    JOIN employees AS employee ON employee.id = link.resource_id AND employee.organization_id = event.organization_id
     JOIN employee_branch_assignments AS assignment ON assignment.employee_id = employee.id
     WHERE link.file_id::text = event.resource_id AND link.resource_type IN ('EMPLOYEE_PHOTO', 'EMPLOYEE_DOCUMENT')
       AND assignment.branch_id = ANY($4::uuid[])
@@ -144,7 +144,7 @@ export async function getAuditEvent(database: Pool, session: AuthenticatedSessio
   const values = filterValues(organizationId, context, { limit: 1, offset: 0 });
   const result = await database.query<AuditEventRow>(
     `SELECT event.id, event.organization_id, event.company_id, event.branch_id, event.actor_id, event.actor_type,
-       event.action, event.resource_type, event.resource_id, event.request_id, event.created_at
+       event.action, event.resource_type, event.resource_id, event.diff, event.request_id, event.created_at
      FROM audit_events AS event WHERE ${whereSql()} AND event.id = $11::uuid LIMIT 1`,
     [...values, eventId],
   );
