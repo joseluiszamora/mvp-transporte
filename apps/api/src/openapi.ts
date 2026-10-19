@@ -508,6 +508,53 @@ export const openApiDocument = {
         responses: { "200": { description: "Detalle inmutable del evento.", content: { "application/json": { schema: { $ref: "#/components/schemas/AuditEventResponse" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/notifications/access": {
+      get: {
+        summary: "Devuelve si el usuario puede consultar el historial de correo de la organización seleccionada.", operationId: "getNotificationAccess", security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Acceso efectivo a historial organización.", content: { "application/json": { schema: { $ref: "#/components/schemas/NotificationAccess" } } } }, "401": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/notifications/smtp": {
+      get: {
+        summary: "Consulta la configuración SMTP sin devolver la contraseña.", operationId: "getInstallationSmtpSettings", security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Configuración SMTP redacteda.", content: { "application/json": { schema: { $ref: "#/components/schemas/InstallationSmtpSettings" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      put: {
+        summary: "Guarda el SMTP de instalación y cifra su contraseña en el servidor.", operationId: "saveInstallationSmtpSettings", security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/InstallationSmtpSettingsMutation" } } } },
+        responses: { "200": { description: "Configuración guardada sin devolver la contraseña.", content: { "application/json": { schema: { $ref: "#/components/schemas/InstallationSmtpSettings" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "503": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/notifications/smtp/test": {
+      post: {
+        summary: "Envía un mensaje de prueba al correo elegido por un administrador de plataforma.", operationId: "sendSmtpTest", security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", additionalProperties: false, required: ["recipient"], properties: { recipient: { type: "string", format: "email", maxLength: 320 } } } } } },
+        responses: { "200": { description: "El servidor SMTP aceptó el mensaje." }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "503": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/notifications/templates": {
+      get: {
+        summary: "Lista las plantillas de sistema visibles para una organización autorizada.", operationId: "listEmailTemplates", security: [{ bearerAuth: [] }],
+        responses: {
+          "200": { description: "Plantillas disponibles.", content: { "application/json": { schema: { type: "object", properties: { items: { type: "array", items: { $ref: "#/components/schemas/EmailTemplateSummary" } } } } } } },
+          "403": { $ref: "#/components/responses/ApiError" },
+        },
+      },
+    },
+    "/api/v1/notifications/deliveries": {
+      get: {
+        summary: "Lista resultados sanitizados del outbox en el tenant seleccionado; requiere notifications.read a nivel de organización.", operationId: "listEmailDeliveries", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "outcome", schema: { type: "string", enum: ["SENT", "FAILED"] } },
+          { in: "query", name: "templateCode", schema: { type: "string", maxLength: 100 } },
+          { in: "query", name: "from", schema: { type: "string", format: "date-time" } },
+          { in: "query", name: "to", schema: { type: "string", format: "date-time" } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página sin destinatarios ni contenido del correo.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfEmailDeliveries" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/employees/scope-options": {
       get: {
         summary: "Lista empresas, sucursales, cargos, tipos de documento y cuentas disponibles dentro del alcance autorizado.", operationId: "listEmployeeScopeOptions", security: [{ bearerAuth: [] }],
@@ -769,6 +816,18 @@ export const openApiDocument = {
       },
       AuditEventResponse: { type: "object", additionalProperties: false, required: ["item"], properties: { item: { $ref: "#/components/schemas/AuditEventDetails" } } },
       PageOfAuditEvents: { type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"], properties: { items: { type: "array", items: { $ref: "#/components/schemas/AuditEventSummary" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } } },
+      NotificationAccess: { type: "object", additionalProperties: false, required: ["canReadHistory"], properties: { canReadHistory: { type: "boolean" } } },
+      InstallationSmtpSettings: {
+        type: "object", additionalProperties: false, required: ["source", "configured", "host", "port", "secure", "requireTls", "fromAddress", "username", "passwordConfigured", "updatedAt"],
+        properties: { source: { type: "string", enum: ["DATABASE", "ENVIRONMENT", "UNCONFIGURED"] }, configured: { type: "boolean" }, host: { type: "string" }, port: { type: "integer" }, secure: { type: "boolean" }, requireTls: { type: "boolean" }, fromAddress: { type: "string" }, username: { type: "string" }, passwordConfigured: { type: "boolean" }, updatedAt: { type: ["string", "null"], format: "date-time" } },
+      },
+      InstallationSmtpSettingsMutation: {
+        type: "object", additionalProperties: false, required: ["host", "port", "secure", "requireTls", "fromAddress"],
+        properties: { host: { type: "string", minLength: 1, maxLength: 255 }, port: { type: "integer", minimum: 1, maximum: 65535 }, secure: { type: "boolean" }, requireTls: { type: "boolean" }, fromAddress: { type: "string", minLength: 1, maxLength: 320 }, username: { type: ["string", "null"], maxLength: 320 }, password: { type: "string", maxLength: 1024 }, clearPassword: { type: "boolean" } },
+      },
+      EmailTemplateSummary: { type: "object", additionalProperties: false, required: ["code", "subject", "status", "updatedAt"], properties: { code: { type: "string" }, subject: { type: "string" }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] }, updatedAt: { type: "string", format: "date-time" } } },
+      EmailDeliverySummary: { type: "object", additionalProperties: false, required: ["id", "templateCode", "attempt", "outcome", "errorCode", "createdAt"], properties: { id: { type: "string", format: "uuid" }, templateCode: { type: "string" }, attempt: { type: "integer" }, outcome: { type: "string", enum: ["SENT", "FAILED"] }, errorCode: { type: ["string", "null"] }, createdAt: { type: "string", format: "date-time" } } },
+      PageOfEmailDeliveries: { type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"], properties: { items: { type: "array", items: { $ref: "#/components/schemas/EmailDeliverySummary" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } } },
       EmployeeListItem: {
         type: "object", additionalProperties: false,
         required: ["id", "companyId", "internalCode", "firstNames", "lastNames", "position", "hireDate", "status", "branches"],

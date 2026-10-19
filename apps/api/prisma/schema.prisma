@@ -184,6 +184,7 @@ model User {
   numberSequencesUpdated NumberSequence[] @relation("NumberSequenceUpdatedBy")
   uploadedFiles File[] @relation("FileUploader")
   employeeDocumentsUploaded EmployeeDocument[]
+  installationSmtpSettingsUpdated InstallationSmtpSetting[] @relation("InstallationSmtpSettingsUpdatedBy")
 
   @@map("users")
 }
@@ -399,6 +400,23 @@ model EmailDelivery {
   @@unique([outboxId, attempt], map: "email_deliveries_outbox_attempt_key")
   @@index([outboxId, createdAt], map: "email_deliveries_outbox_created_idx")
   @@map("email_deliveries")
+}
+
+model InstallationSmtpSetting {
+  id               Int      @id @default(1) @db.SmallInt
+  host             String   @db.VarChar(255)
+  port             Int
+  secure           Boolean  @default(false)
+  requireTls       Boolean  @default(false) @map("require_tls")
+  fromAddress      String   @map("from_address") @db.VarChar(320)
+  username         String?  @db.VarChar(320)
+  passwordEnvelope Json?    @map("password_envelope") @db.JsonB
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updater          User?    @relation("InstallationSmtpSettingsUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@map("installation_smtp_settings")
 }
 
 model Catalog {

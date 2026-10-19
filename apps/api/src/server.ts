@@ -41,6 +41,7 @@ const app = createApp({
   authSettings: {
     accessTokenSecret: process.env.ACCESS_TOKEN_SECRET,
     emailPayloadEncryptionKey: process.env.EMAIL_PAYLOAD_ENCRYPTION_KEY,
+    smtpSettingsEncryptionKey: process.env.SMTP_SETTINGS_ENCRYPTION_KEY,
     publicWebUrl: process.env.PUBLIC_WEB_URL,
     secureCookies: process.env.NODE_ENV === "production",
   },
