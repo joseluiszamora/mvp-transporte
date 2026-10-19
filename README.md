@@ -49,6 +49,14 @@ Guárdala como `EMAIL_PAYLOAD_ENCRYPTION_KEY` en `.env` y no la compartas ni la 
 
 El transporte SMTP ofrece entrega al menos una vez: si el proceso cae después de que el servidor acepte el correo pero antes de guardar ese resultado en PostgreSQL, un reintento puede duplicarlo.
 
+## Archivos privados
+
+La API guarda bytes fuera de `apps/web/public` y nunca los sirve como archivos estáticos. `FILE_STORAGE_PATH` acepta una ruta absoluta o relativa a la raíz del repositorio; por defecto es `.data/files`. En desarrollo local, esa carpeta se excluye de Git. En una instalación persistente, monta un volumen privado en esa ruta y respáldalo junto con PostgreSQL.
+
+ADM-08 permite adjuntar PDF, JPEG, PNG y WEBP de hasta 10 MiB a empresas y sucursales activas. La extensión, el MIME declarado y la firma del contenido deben coincidir. Para listar o descargar se necesitan `files.read`/`files.download` y el permiso de lectura de la empresa o sucursal; para cargar o quitar, `files.upload`/`files.delete` y el permiso de actualización correspondiente. Los documentos de empleados no son un tipo de enlace habilitado hasta que ADM-05 registre su política de recurso y autorización.
+
+Quitar un adjunto lo oculta y marca para purga después de 24 horas. Programa `npm run files:cleanup` en el host que tenga montado el volumen. El comando purga solo registros sin enlaces que cumplieron el periodo de gracia y archivos físicos huérfanos o temporales con más de 24 horas; conserva archivos vinculados. Requiere `DATABASE_URL` y acceso de escritura al volumen configurado. No lo ejecutes contra datos persistentes sin validar primero el volumen y la conexión seleccionados.
+
 ## Acceso inicial y autenticación
 
 Configura dos secretos distintos en `.env`: `ACCESS_TOKEN_SECRET` y `EMAIL_PAYLOAD_ENCRYPTION_KEY`. Para generar cada uno, ejecuta el siguiente comando por separado y guarda su salida solo en `.env`:
@@ -69,7 +77,7 @@ El comando solicita correo, nombre y confirmación escrita. Crea una cuenta pend
 
 El access token dura 15 minutos y solo vive en memoria del navegador. El refresh token se guarda en cookie HttpOnly y rota; la sesión global vence a los siete días y un nuevo login reemplaza la sesión anterior. La recuperación devuelve la misma respuesta aunque el correo no exista.
 
-`npm run test:integration` inicia PostgreSQL desechable en `tmpfs` junto con Mailpit y usa puertos locales libres. Aplica todas las migraciones y fixtures; verifica restricciones de tenant/scope/sesión, auditoría y outbox, rotación/replay, login concurrente, selección multitenant, autorización, activación/invitaciones, recuperación, rate limit y entrega SMTP real al buzón temporal. Al finalizar elimina ese proyecto sin tocar la base local persistente.
+`npm run test:integration` inicia PostgreSQL desechable en `tmpfs` junto con Mailpit y usa puertos locales libres. Aplica todas las migraciones y fixtures; verifica restricciones de tenant/scope/sesión, auditoría y outbox, rotación/replay, login concurrente, selección multitenant, autorización, activación/invitaciones, recuperación, rate limit, archivos privados y entrega SMTP real al buzón temporal. La integración usa un volumen temporal para los archivos y lo elimina al finalizar, sin tocar la base local persistente.
 
 ## Validaciones
 

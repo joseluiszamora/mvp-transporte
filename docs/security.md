@@ -24,6 +24,14 @@ Tokens activación y recuperación: aleatorios fuertes, hash almacenado, un solo
 - Catálogos globales están protegidos y son de solo lectura para clientes; se muestran solo con `catalogs.read` en la organización actual. Un permiso acotado a empresa o sucursal no se amplía a otra empresa.
 - Desactivar es una baja lógica. Los módulos consumidores deben seleccionar solo opciones activas de catálogos activos; las referencias históricas conservan el ID y no se borran en cascada.
 
+## Archivos privados (TASK-009)
+
+- El driver local escribe fuera del directorio estático web. Los nombres originales solo son metadatos; las rutas usan claves UUID aleatorias y el cliente no puede elegir rutas ni tipos de recurso.
+- La lista de destinos contiene únicamente empresas/sucursales del tenant seleccionado. Adjuntos de empresa requieren `files.*` y el permiso `companies.*` correspondiente; adjuntos de sucursal requieren `files.*` y `branches.*` sobre esa sucursal. La API vuelve a cargar el recurso y recalcula permisos para cada consulta, carga, descarga y eliminación.
+- La carga valida un único campo `file`, extensión, MIME declarado y firma del contenido; admite PDF/JPEG/PNG/WEBP hasta 10 MiB. Los archivos servidos se transmiten solo tras autorización y usan `nosniff`, CSP restrictiva, descarga forzada y `no-store`.
+- Los enlaces tienen tipos explícitos para empresas y sucursales; un UUID arbitrario o `EMPLOYEE_DOCUMENT` no se acepta. Los documentos personales quedan inaccesibles hasta que ADM-05 registre su política y los permisos de documentos. La migración vincula file, tenant, empresa y sucursal con claves foráneas y trigger de consistencia.
+- La eliminación lógica quita el enlace y conserva bytes por 24 horas; la purga elimina solo filas pendientes sin enlaces vencidas, registra auditoría como `SYSTEM` y no borra archivos físicos con metadatos o enlaces vigentes. Los temporales y archivos sin metadatos se eliminan después del mismo periodo.
+
 ## Implementación de TASK-004 (15/10/2026)
 
 - Las contraseñas se derivan con Argon2id (`memoryCost=19456 KiB`, `timeCost=2`, `parallelism=1`); también se verifica una contraseña ficticia para aproximar el costo de un login con correo inexistente. El límite es 12 caracteres Unicode y 1024 bytes UTF-8.

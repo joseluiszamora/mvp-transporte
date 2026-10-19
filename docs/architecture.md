@@ -12,3 +12,5 @@ Tenant seleccionado se valida contra membresía activa en cada solicitud. Los re
 Auth depende de usuarios/membresías/sesiones. Acceso depende de membresías y catálogo de permisos. Personal depende de empresas, sucursales y catálogos. Archivos depende de acceso y políticas de recursos. Notificaciones depende de usuarios, configuración y outbox; no altera el éxito de una transacción ya confirmada si SMTP falla. Auditoría se integra en transacciones relevantes.
 ## Operación
 Docker Compose para PostgreSQL y buzón SMTP local; apps pueden ejecutarse con npm en host. Archivos en volumen persistente privado fuera de web pública. Worker separado del mismo backend, cola/outbox en PostgreSQL; no introducir Redis inicialmente. DigitalOcean futuro con HTTPS y proxy, API/web same-origin preferentemente.
+
+ADM-08 guarda archivos en un driver local configurado por `FILE_STORAGE_PATH`, fuera del directorio estático web. Las descargas siempre pasan por la API y vuelven a autorizar la sesión, el tenant, el scope y la política explícita del recurso. El volumen debe persistir y respaldarse junto con la base de datos.

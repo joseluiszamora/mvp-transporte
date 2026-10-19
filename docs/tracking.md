@@ -20,3 +20,8 @@ Día 1: arranque/tenant; 2: login/sesiones; 3: roles/alcances; 4: catálogos/con
 
 ## Estado verificado 16/10/2026
 - TASK-008: implementación completa en `task/008-configuracion`, depende de TASK-007 integrada por PR #20. Validaciones locales `lint`, `typecheck`, unitarias (7/7), build e integración con PostgreSQL 18/Mailpit desechables aprobadas. Issue #8 permanece abierta hasta aceptación funcional; revisión técnica y prueba manual pendientes. La migración nueva solo se aplicó a la base desechable; no se desplegó producción.
+
+## Estado verificado 18/10/2026
+- TASK-008: PR #23 abierto hacia `main`, CI aprobada; Issue #8 sigue abierta hasta aceptación funcional del propietario. TASK-009 parte de su commit en rama apilada y apuntará a la rama TASK-008 para no mezclar las dos entregas.
+- TASK-009: implementación ADM-08 en `task/009-archivos`; Issue #9 abierta. Validaciones locales `lint`, `typecheck`, pruebas unitarias (7/7), build e integración PostgreSQL/Mailpit desechables correctas. La migración y volumen de archivos solo se usaron en recursos desechables. Revisión técnica, prueba manual de UI y aceptación funcional pendientes; producción y base persistente local no se tocaron.
+- Política registrada: ADM-08 acepta adjuntos de empresa y sucursal con permiso de archivos más permiso del recurso. Enlaces a documentos personales se rechazan hasta que ADM-05 registre entidad y autorización.

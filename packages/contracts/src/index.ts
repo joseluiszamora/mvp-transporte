@@ -283,6 +283,31 @@ export interface NumberSequence {
   updatedAt: string;
 }
 
+export type FileResourceType = "COMPANY_ATTACHMENT" | "BRANCH_ATTACHMENT";
+
+export interface FileScopeOption {
+  resourceType: FileResourceType;
+  resourceId: string;
+  companyId: string;
+  branchId: string | null;
+  label: string;
+  canRead: boolean;
+  canDownload: boolean;
+  canUpload: boolean;
+  canDelete: boolean;
+}
+
+export interface StoredFile {
+  id: string;
+  resourceType: FileResourceType;
+  resourceId: string;
+  originalName: string;
+  detectedMime: "application/pdf" | "image/jpeg" | "image/png" | "image/webp";
+  bytes: number;
+  createdAt: string;
+  downloadUrl: string;
+}
+
 export interface OrganizationMembershipStatusResponse {
   membershipId: string;
   membershipStatus: "ACTIVE" | "SUSPENDED";

@@ -8,6 +8,7 @@
     "start": "node --env-file-if-exists=../../.env dist/server.js",
     "worker:email": "node --env-file-if-exists=../../.env dist/modules/email/worker-main.js",
     "worker:email:dev": "node --experimental-strip-types --watch --env-file-if-exists=../../.env src/modules/email/worker-main.ts",
+    "files:cleanup": "node --env-file-if-exists=../../.env --experimental-strip-types src/modules/files/cleanup-main.ts",
     "bootstrap:platform-admin": "node --env-file-if-exists=../../.env --experimental-strip-types src/cli/bootstrap-platform-admin.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
     "typecheck": "prisma generate && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.prisma.json",
@@ -22,6 +23,7 @@
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "argon2": "0.45.1",
+    "busboy": "1.6.0",
     "cors": "2.8.6",
     "express": "5.3.0",
     "helmet": "8.3.0",
@@ -30,6 +32,7 @@
     "pg": "8.23.1"
   },
   "devDependencies": {
+    "@types/busboy": "1.5.5",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/node": "24.19.2",
