@@ -485,6 +485,29 @@ export const openApiDocument = {
         responses: { "200": { description: "Número emitido y auditado.", content: { "application/json": { schema: { $ref: "#/components/schemas/IssuedNumber" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/audit": {
+      get: {
+        summary: "Lista eventos inmutables de la organización y alcances autorizados.", operationId: "listAuditEvents", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "from", schema: { type: "string", format: "date-time" } },
+          { in: "query", name: "to", schema: { type: "string", format: "date-time" } },
+          { in: "query", name: "actorId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "action", schema: { type: "string", maxLength: 100 } },
+          { in: "query", name: "resourceType", schema: { type: "string", maxLength: 100 } },
+          { in: "query", name: "resourceId", schema: { type: "string", maxLength: 100 } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página de eventos filtrada por permiso y alcance.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfAuditEvents" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/audit/{eventId}": {
+      get: {
+        summary: "Consulta un evento dentro de la organización y alcance autorizados; el detalle se sanitiza al leer.", operationId: "getAuditEvent", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "eventId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Detalle inmutable del evento.", content: { "application/json": { schema: { $ref: "#/components/schemas/AuditEventResponse" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/employees/scope-options": {
       get: {
         summary: "Lista empresas, sucursales, cargos, tipos de documento y cuentas disponibles dentro del alcance autorizado.", operationId: "listEmployeeScopeOptions", security: [{ bearerAuth: [] }],
@@ -730,6 +753,22 @@ export const openApiDocument = {
       },
     },
     schemas: {
+      AuditEventSummary: {
+        type: "object", additionalProperties: false,
+        required: ["id", "companyId", "branchId", "actorId", "actorType", "action", "resourceType", "resourceId", "requestId", "createdAt"],
+        properties: {
+          id: { type: "string", format: "uuid" }, companyId: { type: ["string", "null"], format: "uuid" }, branchId: { type: ["string", "null"], format: "uuid" },
+          actorId: { type: ["string", "null"], format: "uuid" }, actorType: { type: "string", enum: ["USER", "SYSTEM"] }, action: { type: "string" },
+          resourceType: { type: "string" }, resourceId: { type: ["string", "null"] }, requestId: { type: "string" }, createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      AuditEventDetails: {
+        allOf: [{ $ref: "#/components/schemas/AuditEventSummary" }, {
+          type: "object", additionalProperties: false, required: ["diff"], properties: { diff: { oneOf: [{ type: "object", additionalProperties: true }, { type: "null" }] } },
+        }],
+      },
+      AuditEventResponse: { type: "object", additionalProperties: false, required: ["item"], properties: { item: { $ref: "#/components/schemas/AuditEventDetails" } } },
+      PageOfAuditEvents: { type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"], properties: { items: { type: "array", items: { $ref: "#/components/schemas/AuditEventSummary" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } } },
       EmployeeListItem: {
         type: "object", additionalProperties: false,
         required: ["id", "companyId", "internalCode", "firstNames", "lastNames", "position", "hireDate", "status", "branches"],

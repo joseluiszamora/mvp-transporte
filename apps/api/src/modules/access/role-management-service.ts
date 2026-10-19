@@ -526,6 +526,8 @@ export async function createRoleAssignment(
     await appendAuditEvent(client, {
       actor: { type: "USER", userId: session.userId },
       organizationId,
+      companyId: target.companyId ?? null,
+      branchId: target.branchId ?? null,
       action: "ROLE_ASSIGNED",
       resourceType: "RoleAssignment",
       resourceId: id,
@@ -577,6 +579,8 @@ export async function deleteRoleAssignment(
     await appendAuditEvent(client, {
       actor: { type: "USER", userId: session.userId },
       organizationId,
+      companyId: assignment.company_id,
+      branchId: assignment.branch_id,
       action: "ROLE_UNASSIGNED",
       resourceType: "RoleAssignment",
       resourceId: assignment.id,

@@ -209,6 +209,7 @@ export async function createTenantCompany(
     await appendAuditEvent(client, {
       actor: { type: "USER", userId: session.userId },
       organizationId,
+      companyId: id,
       action: "COMPANY_CREATED",
       resourceType: "Company",
       resourceId: id,
@@ -379,7 +380,7 @@ export async function createTenantBranch(
     const row = result.rows[0];
     if (!row) throw new Error("BRANCH_NOT_CREATED");
     await appendAuditEvent(client, {
-      actor: { type: "USER", userId: session.userId }, organizationId, companyId: company.id,
+      actor: { type: "USER", userId: session.userId }, organizationId, companyId: company.id, branchId: id,
       action: "BRANCH_CREATED", resourceType: "Branch", resourceId: id, requestId: input.requestId,
       after: { code, name, address, contact, status: "ACTIVE" },
     });
@@ -463,7 +464,7 @@ export async function updateTenantBranch(
     const updated = result.rows[0];
     if (!updated) throw new Error("BRANCH_UPDATE_FAILED");
     await appendAuditEvent(client, {
-      actor: { type: "USER", userId: session.userId }, organizationId, companyId: current.company_id,
+      actor: { type: "USER", userId: session.userId }, organizationId, companyId: current.company_id, branchId: current.id,
       action: nextStatus !== current.status
         ? nextStatus === "ACTIVE" ? "BRANCH_ACTIVATED" : "BRANCH_DEACTIVATED"
         : "BRANCH_UPDATED",
