@@ -34,6 +34,10 @@ import type {
   FileResourceType,
   FileScopeOption,
   StoredFile,
+  EmployeeDetails,
+  EmployeeDocumentsResponse,
+  EmployeeListItem,
+  EmployeeScopeOptions,
 } from "@mvp-transporte/contracts";
 
 const csrfCookieName = "mvp_csrf";
@@ -270,12 +274,13 @@ function sendMultipartUpload(path: string, form: FormData, token: string, onProg
   });
 }
 
-export async function uploadMultipart<T>(path: string, file: File, onProgress?: (loaded: number, total: number) => void): Promise<T> {
+export async function uploadMultipart<T>(path: string, file: File, onProgress?: (loaded: number, total: number) => void, fields: Record<string, string> = {}): Promise<T> {
   if (!accessToken && !(await refreshSession())) throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
   const tokenBeforeRequest = accessToken;
   if (!tokenBeforeRequest) throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
   const form = new FormData();
   form.append("file", file, file.name);
+  for (const [key, value] of Object.entries(fields)) form.append(key, value);
   let result = await sendMultipartUpload(path, form, tokenBeforeRequest, onProgress);
   if (result.status === 401 && await refreshSession(tokenBeforeRequest) && accessToken) {
     result = await sendMultipartUpload(path, form, accessToken, onProgress);
@@ -301,6 +306,13 @@ export async function downloadPrivateFile(path: string, fileName: string): Promi
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+}
+
+export async function getPrivateFileBlob(fileId: string): Promise<Blob> {
+  if (!accessToken && !(await refreshSession())) throw new AuthClientError(401, "UNAUTHENTICATED", "Inicia sesión para continuar.");
+  const response = await authorizedFetch(`/files/${encodeURIComponent(fileId)}/content`, {}, true);
+  if (!response.ok) throw await readError(response);
+  return response.blob();
 }
 
 export async function publicRequest<T>(path: string, body: unknown): Promise<T> {
@@ -538,6 +550,53 @@ export async function uploadPrivateFile(resource: Pick<FileScopeOption, "resourc
 
 export async function deletePrivateFile(fileId: string): Promise<void> {
   await apiRequest<void>(`/files/${encodeURIComponent(fileId)}`, { method: "DELETE" });
+}
+
+export async function listEmployeeScopeOptions(): Promise<EmployeeScopeOptions> {
+  return apiRequest<EmployeeScopeOptions>("/employees/scope-options");
+}
+
+export async function listEmployees(input: { limit?: number; offset?: number; search?: string; status?: "ACTIVE" | "INACTIVE"; companyId?: string; branchId?: string } = {}) {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.search) query.set("search", input.search);
+  if (input.status) query.set("status", input.status);
+  if (input.companyId) query.set("companyId", input.companyId);
+  if (input.branchId) query.set("branchId", input.branchId);
+  return apiRequest<{ items: EmployeeListItem[]; total: number; limit: number; offset: number }>(`/employees?${query.toString()}`);
+}
+
+export async function getEmployee(employeeId: string): Promise<{ item: EmployeeDetails }> {
+  return apiRequest<{ item: EmployeeDetails }>(`/employees/${encodeURIComponent(employeeId)}`);
+}
+
+export async function createEmployee(input: {
+  companyId: string; internalCode: string; firstNames: string; lastNames: string; positionId?: string | null; hireDate: string;
+  branchIds: string[]; personalDocumentNumber?: string | null; personalPhone?: string | null; personalEmail?: string | null; personalAddress?: string | null; userId?: string | null;
+}): Promise<{ item: EmployeeDetails }> {
+  return apiRequest<{ item: EmployeeDetails }>("/employees", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updateEmployee(employeeId: string, input: Partial<{
+  internalCode: string; firstNames: string; lastNames: string; positionId: string | null; hireDate: string; status: "ACTIVE" | "INACTIVE";
+  branchIds: string[]; personalDocumentNumber: string | null; personalPhone: string | null; personalEmail: string | null; personalAddress: string | null; userId: string | null;
+}>): Promise<{ item: EmployeeDetails }> {
+  return apiRequest<{ item: EmployeeDetails }>(`/employees/${encodeURIComponent(employeeId)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function listEmployeeDocuments(employeeId: string): Promise<EmployeeDocumentsResponse> {
+  return apiRequest<EmployeeDocumentsResponse>(`/employees/${encodeURIComponent(employeeId)}/documents`);
+}
+
+export async function uploadEmployeePhoto(employeeId: string, file: File, onProgress?: (loaded: number, total: number) => void): Promise<StoredFile> {
+  const result = await uploadMultipart<{ item: StoredFile }>(`/employees/${encodeURIComponent(employeeId)}/photo`, file, onProgress);
+  return result.item;
+}
+
+export async function uploadEmployeeDocument(employeeId: string, file: File, fields: { typeId: string; issuedAt?: string; expiresAt?: string }, onProgress?: (loaded: number, total: number) => void): Promise<StoredFile> {
+  const result = await uploadMultipart<{ item: StoredFile }>(`/employees/${encodeURIComponent(employeeId)}/documents`, file, onProgress, {
+    typeId: fields.typeId, ...(fields.issuedAt ? { issuedAt: fields.issuedAt } : {}), ...(fields.expiresAt ? { expiresAt: fields.expiresAt } : {}),
+  });
+  return result.item;
 }
 
 export async function downloadPrivateFileById(fileId: string, fileName: string): Promise<void> {

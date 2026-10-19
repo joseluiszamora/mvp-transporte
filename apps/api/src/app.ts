@@ -11,6 +11,7 @@ import type { AuthSettings } from "./modules/auth/auth-service.ts";
 import { createCatalogRouter } from "./modules/catalogs/catalog-router.ts";
 import { createSettingsRouter } from "./modules/settings/settings-router.ts";
 import { createFilesRouter } from "./modules/files/files-router.ts";
+import { createEmployeesRouter } from "./modules/employees/employees-router.ts";
 
 export interface AppDependencies {
   allowedOrigins?: readonly string[];
@@ -70,6 +71,7 @@ export function createApp(dependencies: AppDependencies = {}): Express {
   app.use("/api/v1/catalogs", createCatalogRouter(dependencies.database, authSettings, allowedOrigins));
   app.use("/api/v1/settings", createSettingsRouter(dependencies.database, authSettings, allowedOrigins));
   app.use("/api/v1/files", createFilesRouter(dependencies.database, authSettings, allowedOrigins, dependencies.fileStorageRoot));
+  app.use("/api/v1/employees", createEmployeesRouter(dependencies.database, authSettings, allowedOrigins, dependencies.fileStorageRoot));
 
   app.use((_request, response) => {
     response.status(404).json({

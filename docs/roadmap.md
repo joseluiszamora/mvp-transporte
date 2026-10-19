@@ -13,7 +13,7 @@ Diez módulos antes de distribución. Orden por dependencia, no por numeración 
 | TASK-007 | Catálogos | 006 | Integrada en `main` por PR #20; aceptación funcional pendiente |
 | TASK-008 | Configuración | 007 | Implementada en `task/008-configuracion`; revisión técnica y aceptación funcional pendientes |
 | TASK-009 | Archivos privados | 008 | Implementada en `task/009-archivos`; revisión técnica y aceptación funcional pendientes |
-| TASK-010 | Personal | 009 | Pendiente |
+| TASK-010 | Personal | 009 | Implementación en `task/010-personal`; integración técnica pendiente de Docker/CI y aceptación funcional pendiente |
 | TASK-011 | Consulta auditoría | 010 | Pendiente |
 | TASK-012 | Administración de correo | 011 | Pendiente |
 | TASK-013 | Consolidación y aceptación | 012 | Pendiente |
