@@ -24,4 +24,5 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run build`: correcto; Vite mantiene advertencia informativa de chunk mayor a 500 kB.
 - `npm run test:integration`: correcto; migró TASK-002/003/004 y sembró únicamente PostgreSQL desechable, comprobó concurrencia, rotación/replay, aislamiento y permisos tenant, invitaciones/activación, anti-enumeración, recuperación/revocación y SMTP real a Mailpit; Compose eliminó los contenedores al final.
 - `npm audit --audit-level=high`: correcto, 0 vulnerabilidades.
-- No se aplicaron migraciones a la base local persistente ni se desplegó producción. Falta prueba manual de UI/varias pestañas y aceptación funcional del propietario; la issue permanece abierta.
+- No se aplicaron migraciones a la base local persistente ni se desplegó producción. El propietario confirmó la aceptación funcional y cerró la issue #4; estado verificado en GitHub el 24/10/2026.
+- 24/10/2026: corregida en `task/004-persistencia-tema-regresion` la pérdida de preferencia de tema al recargar, restaurando el valor `light`/`dark` desde `localStorage` y guardando cada cambio. Pasaron `npm run lint`, `npm run typecheck` y `npm run build`; la verificación de refresco por el propietario queda pendiente.

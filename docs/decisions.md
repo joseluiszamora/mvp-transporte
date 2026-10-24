@@ -41,6 +41,7 @@ No cambiar silenciosamente una decisión aprobada. No fijar dependencias a versi
 
 ## Implementación de TASK-004
 
+- 15/10/2026: la preferencia visual claro/oscuro se conserva en `localStorage` del origen local; es un dato no sensible. Credenciales y tokens mantienen sus ubicaciones aprobadas (memoria y cookie HttpOnly).
 - 15/10/2026: hashing con Argon2id (`m=19456 KiB`, `t=2`, `p=1`) y token access HS256 firmado con una clave Base64 canónica de 32 bytes. Se eligen parámetros conservadores para esta base inicial; los enlaces opacos de sesión/activación/recuperación se persisten como SHA-256.
 - 15/10/2026: los límites de intentos viven en PostgreSQL con claves hash de operación, IP e identidad; así sobreviven reinicios y comparten conteo entre procesos sin almacenar correos/IP en claro. Se limpia una muestra de contadores antiguos durante solicitudes.
 - 15/10/2026: refresh exige cookie doble `HttpOnly` + token CSRF legible y header coincidente, además de `Origin` exacto; CORS de credenciales queda limitado a `WEB_ORIGINS`. La cookie usa `SameSite=Lax`, `Secure` cuando `NODE_ENV=production` y path de autenticación.
