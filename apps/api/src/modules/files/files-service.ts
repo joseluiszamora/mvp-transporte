@@ -392,7 +392,13 @@ export async function storeUploadedFile(
       await appendAuditEvent(client, {
         organizationId: target.organizationId, companyId: target.companyId, branchId: target.branchId,
         actor: { type: "USER", userId: session.userId }, action: "FILE_UPLOADED", resourceType: "File", resourceId: id,
-        requestId: input.requestId, after: { detectedMime: input.content.detectedMime, bytes: input.content.bytes, resourceType: input.resourceType },
+        requestId: input.requestId,
+        after: {
+          detectedMime: input.content.detectedMime,
+          bytes: input.content.bytes,
+          resourceType: input.resourceType,
+          ...(target.employeeId ? { employeeId: target.employeeId } : {}),
+        },
       });
       return mapFile(row);
     });
@@ -506,7 +512,13 @@ export async function requestFileDeletion(database: Pool, session: Authenticated
     await appendAuditEvent(client, {
       organizationId: latestTarget.organizationId, companyId: latestTarget.companyId, branchId: latestTarget.branchId,
       actor: { type: "USER", userId: session.userId }, action: "FILE_DELETE_REQUESTED", resourceType: "File", resourceId: row.id,
-      requestId, before: { status: "ACTIVE" }, after: { status: "DELETE_PENDING", graceHours: 24 },
+      requestId,
+      before: { status: "ACTIVE", ...(latestTarget.employeeId ? { employeeId: latestTarget.employeeId } : {}) },
+      after: {
+        status: "DELETE_PENDING",
+        graceHours: 24,
+        ...(latestTarget.employeeId ? { employeeId: latestTarget.employeeId } : {}),
+      },
     });
   });
 }

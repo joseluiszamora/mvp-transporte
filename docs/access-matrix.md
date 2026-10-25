@@ -13,7 +13,7 @@ Permisos globales inmutables en código/migraciones. Roles editables por tenant.
 | settings | read/update |
 | catalogs | read/manage (globales de solo lectura; catálogos propios por organización/empresa) |
 | files | upload/read/download/delete |
-| audit | read |
+| audit | read (organización, empresa o sucursal según asignación efectiva) |
 | notifications | read/manage |
 
 Admin cliente: todos los permisos de cliente dentro de alcance, nunca plataforma. Supervisor: companies.read, branches.read, employees.read/create/update, catalogs.read, files.upload/read/download para recursos laborales autorizados, notifications.read; sin employee_documents ni datos personales restringidos por defecto. Operador: companies.read, branches.read, employees.read limitado a vista laboral, catalogs.read; escrituras adicionales se conceden explícitamente. Visor: permisos read seleccionados para módulos concretos; no incluir audit/documentos por defecto.

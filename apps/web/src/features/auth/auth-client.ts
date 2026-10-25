@@ -38,6 +38,8 @@ import type {
   EmployeeDocumentsResponse,
   EmployeeListItem,
   EmployeeScopeOptions,
+  AuditEventSummary,
+  AuditEventDetails,
 } from "@mvp-transporte/contracts";
 
 const csrfCookieName = "mvp_csrf";
@@ -646,4 +648,21 @@ export async function createOrganization(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function listAuditEvents(input: {
+  limit?: number; offset?: number; from?: string; to?: string; actorId?: string; action?: string; resourceType?: string; resourceId?: string;
+} = {}): Promise<PageResponse<AuditEventSummary>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.from) query.set("from", input.from);
+  if (input.to) query.set("to", input.to);
+  if (input.actorId) query.set("actorId", input.actorId);
+  if (input.action) query.set("action", input.action);
+  if (input.resourceType) query.set("resourceType", input.resourceType);
+  if (input.resourceId) query.set("resourceId", input.resourceId);
+  return apiRequest<PageResponse<AuditEventSummary>>(`/audit?${query.toString()}`);
+}
+
+export async function getAuditEvent(eventId: string): Promise<{ item: AuditEventDetails }> {
+  return apiRequest<{ item: AuditEventDetails }>(`/audit/${encodeURIComponent(eventId)}`);
 }
