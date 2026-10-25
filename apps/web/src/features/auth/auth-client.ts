@@ -40,6 +40,10 @@ import type {
   EmployeeScopeOptions,
   AuditEventSummary,
   AuditEventDetails,
+  InstallationSmtpSettings,
+  EmailDeliverySummary,
+  EmailTemplateSummary,
+  NotificationAccessResponse,
 } from "@mvp-transporte/contracts";
 
 const csrfCookieName = "mvp_csrf";
@@ -665,4 +669,38 @@ export async function listAuditEvents(input: {
 
 export async function getAuditEvent(eventId: string): Promise<{ item: AuditEventDetails }> {
   return apiRequest<{ item: AuditEventDetails }>(`/audit/${encodeURIComponent(eventId)}`);
+}
+
+export async function getInstallationSmtpSettings(): Promise<InstallationSmtpSettings> {
+  return apiRequest<InstallationSmtpSettings>("/notifications/smtp");
+}
+
+export async function getNotificationAccess(): Promise<NotificationAccessResponse> {
+  return apiRequest<NotificationAccessResponse>("/notifications/access");
+}
+
+export async function saveInstallationSmtpSettings(input: {
+  host: string; port: number; secure: boolean; requireTls: boolean; fromAddress: string; username: string | null;
+  password?: string; clearPassword?: boolean;
+}): Promise<InstallationSmtpSettings> {
+  return apiRequest<InstallationSmtpSettings>("/notifications/smtp", { method: "PUT", body: JSON.stringify(input) });
+}
+
+export async function sendSmtpTest(recipient: string): Promise<{ sent: true }> {
+  return apiRequest<{ sent: true }>("/notifications/smtp/test", { method: "POST", body: JSON.stringify({ recipient }) });
+}
+
+export async function listEmailTemplates(): Promise<{ items: EmailTemplateSummary[] }> {
+  return apiRequest<{ items: EmailTemplateSummary[] }>("/notifications/templates");
+}
+
+export async function listEmailDeliveries(input: {
+  limit?: number; offset?: number; outcome?: "SENT" | "FAILED"; templateCode?: string; from?: string; to?: string;
+} = {}): Promise<PageResponse<EmailDeliverySummary>> {
+  const query = new URLSearchParams({ limit: String(input.limit ?? 20), offset: String(input.offset ?? 0) });
+  if (input.outcome) query.set("outcome", input.outcome);
+  if (input.templateCode) query.set("templateCode", input.templateCode);
+  if (input.from) query.set("from", input.from);
+  if (input.to) query.set("to", input.to);
+  return apiRequest<PageResponse<EmailDeliverySummary>>(`/notifications/deliveries?${query.toString()}`);
 }

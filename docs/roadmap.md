@@ -13,9 +13,9 @@ Diez módulos antes de distribución. Orden por dependencia, no por numeración 
 | TASK-007 | Catálogos | 006 | Integrada en `main` por PR #20; aceptación funcional pendiente |
 | TASK-008 | Configuración | 007 | Integrada en `main` por PR #23; aceptación funcional pendiente |
 | TASK-009 | Archivos privados | 008 | Integrada en `main` por PR #24; aceptación funcional pendiente |
-| TASK-010 | Personal | 009 | PR #25 abierta; CI #27 y revisión técnica pasaron; prueba manual/aceptación funcional pendientes |
-| TASK-011 | Consulta auditoría | 010 | Implementación y checks locales completados; PR #26 apilada; prueba manual y aceptación funcional pendientes |
-| TASK-012 | Administración de correo | 011 | Pendiente |
+| TASK-010 | Personal | 009 | Integrada en `main` por PR #25; aceptación funcional confirmada y issue #10 cerrada |
+| TASK-011 | Consulta auditoría | 010 | Integrada y aceptada en `main` por PR #26; issue #11 cerrada |
+| TASK-012 | Administración de correo | 011 | Implementación en PR #27 hacia `main`; validaciones locales registradas, CI remota en curso; prueba funcional pendiente |
 | TASK-013 | Consolidación y aceptación | 012 | Pendiente |
 
 La semana disponible del propietario se dedica a validar entregas incrementales. No asignar fechas de finalización sin medir avance de las primeras tareas. No hacer trabajo paralelo sobre modelo/auth antes de estabilizar contratos.

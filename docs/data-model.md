@@ -29,6 +29,7 @@ Especificación conceptual: TASK-002 concreta Prisma y migraciones conservando i
 | EmailTemplate | código conocido, subject/body, variables permitidas |
 | EmailOutbox | organization_id?, template, recipient, payload limitado, deduplication_key único, status, attempts, next_attempt_at |
 | EmailDelivery | outbox_id, result, timestamp, error sanitizado |
+| InstallationSmtpSetting | configuración SMTP singleton de la instalación; contraseña en sobre AES-256-GCM y clave externa a la base/repositorio |
 
 ## Invariantes
 tenant obligatorio en datos privados. Company/Branch y asociaciones validan mismo tenant vía claves compuestas donde aplique. branch code único por company; membership única organization/user; employee code único company. Scope ORGANIZATION no tiene company/branch; COMPANY exige company propia y branch nula; BRANCH exige branch y company consistentes. Role y membership de assignment comparten tenant. Un solo Session activo por user mediante índice parcial SQL o mecanismo transaccional equivalente verificable. Campos opcionales e índices con NULL requieren diseño explícito, no asumir unicidad PostgreSQL de NULL.

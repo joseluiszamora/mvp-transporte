@@ -1,6 +1,7 @@
 import { createDatabasePool } from "../../database.ts";
 import { processOutboxBatch } from "./outbox-worker.ts";
 import { createSmtpEmailSender } from "./smtp-transport.ts";
+import { loadRuntimeSmtpConfiguration } from "./smtp-settings-service.ts";
 
 function requiredSetting(value: string | undefined, name: string): string {
   const normalized = value?.trim();
@@ -25,7 +26,7 @@ const databaseUrl = requiredSetting(process.env.DATABASE_URL, "DATABASE_URL");
 const encryptionKey = requiredSetting(process.env.EMAIL_PAYLOAD_ENCRYPTION_KEY, "EMAIL_PAYLOAD_ENCRYPTION_KEY");
 const pollIntervalMs = readInteger(process.env.EMAIL_WORKER_POLL_MS, "EMAIL_WORKER_POLL_MS", 1_000, 100, 60_000);
 const database = createDatabasePool(databaseUrl);
-const sender = createSmtpEmailSender();
+const smtpSettings = { secureCookies: false, smtpSettingsEncryptionKey: process.env.SMTP_SETTINGS_ENCRYPTION_KEY };
 let stopping = false;
 
 process.stdout.write("Worker de correo iniciado.\n");
@@ -44,16 +45,25 @@ const delay = (milliseconds: number): Promise<void> =>
 try {
   while (!stopping) {
     try {
-      const result = await processOutboxBatch(database, sender, { encryptionKey });
-      if (result.claimed === 0) {
+      const configuration = await loadRuntimeSmtpConfiguration(database, smtpSettings);
+      if (!configuration) {
         await delay(pollIntervalMs);
+        continue;
       }
+      const sender = createSmtpEmailSender(configuration);
+      let claimed = 0;
+      try {
+        const result = await processOutboxBatch(database, sender, { encryptionKey });
+        claimed = result.claimed;
+      } finally {
+        sender.close();
+      }
+      if (claimed === 0) await delay(pollIntervalMs);
     } catch {
       process.stderr.write("Falló un ciclo del worker de correo; se reintentará.\n");
       await delay(pollIntervalMs);
     }
   }
 } finally {
-  sender.close();
   await database.end();
 }
