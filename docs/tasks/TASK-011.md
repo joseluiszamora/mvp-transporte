@@ -1,5 +1,5 @@
 # TASK-011 — Consulta auditoría
-Estado: en revisión técnica. Dependencias: 010. Issue GitHub: [#11](https://github.com/joseluiszamora/mvp-transporte/issues/11) abierta; aceptación funcional pendiente.
+Estado: integrada técnicamente en `main` por PR #26; aceptación funcional pendiente. Dependencias: 010. Issue GitHub: [#11](https://github.com/joseluiszamora/mvp-transporte/issues/11) abierta.
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -26,4 +26,5 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run test`: pasó, 9/9.
 - `npm run build`: pasó; Vite informó un bundle web de 723.45 kB, sobre el umbral de 500 kB.
 - `npm run test:integration`: pasó con PostgreSQL/Mailpit desechables; aplicó las siete migraciones a la base efímera y completó la API. No se usó la base persistente local.
-- Pendiente: CI del head actualizado de PR #26, ahora dirigida a `main`. El head añade cobertura de eventos de archivos de empleado para confirmar visibilidad tras desvincular el archivo y denegación para empleados fuera de la sucursal. Prueba manual de UI y aceptación funcional pendientes. Las decisiones de no purgar y seguir la asignación actual están aprobadas.
+- CI del head de PR #26 (run #34): aprobada para lint, typecheck, pruebas unitarias, build e integración PostgreSQL desechable. La integración confirma visibilidad de eventos de archivos personales tras desvincularlos y denegación para empleados fuera de la sucursal.
+- Pendiente: prueba manual de UI ADM-07 y aceptación funcional del propietario. La Issue #11 permanece abierta. No se usó la base persistente local ni se desplegó producción.
