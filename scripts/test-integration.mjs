@@ -1339,6 +1339,23 @@ async function verifyRoleManagement(database, createApp, fileStorageRoot) {
     const branchAuditRole = await createRole(`Auditoría de sucursal ${marker}`, ["audit.read"]);
     const branchAuditAssignment = await assign({ membershipId: recipientMembershipId, roleId: branchAuditRole.id, scopeType: "BRANCH", companyId, branchId: otherBranchId });
     assert.equal(branchAuditAssignment.response.status, 201);
+    const employeeDocumentUploadAudit = await apiRequest(baseUrl, `/audit?resourceType=File&action=FILE_UPLOADED&resourceId=${employeeDocument.body.item.id}`, { accessToken: recipientToken });
+    assert.equal(employeeDocumentUploadAudit.response.status, 200);
+    assert.ok(employeeDocumentUploadAudit.body.items.some((event) => event.resourceId === employeeDocument.body.item.id), "El auditor ve la carga del empleado asignado a su sucursal.");
+    const employeeDocumentDeleteAudit = await apiRequest(baseUrl, `/audit?resourceType=File&action=FILE_DELETE_REQUESTED&resourceId=${employeeDocument.body.item.id}`, { accessToken: recipientToken });
+    assert.equal(employeeDocumentDeleteAudit.response.status, 200);
+    assert.ok(employeeDocumentDeleteAudit.body.items.some((event) => event.resourceId === employeeDocument.body.item.id), "El evento de borrado sigue visible tras quitar el vínculo al empleado.");
+    const employeeMovedAway = await apiRequest(baseUrl, `/employees/${employeeWithoutUser.body.item.id}`, {
+      method: "PATCH", accessToken: adminToken, body: { branchIds: [branchId] },
+    });
+    assert.equal(employeeMovedAway.response.status, 200);
+    const employeePhotoOutsideBranch = await multipartFileRequest(baseUrl, `/employees/${employeeWithoutUser.body.item.id}/photo`, {
+      accessToken: adminToken, filename: "foto-otra-sucursal.png", mime: "image/png", content: employeePhotoContent,
+    });
+    assert.equal(employeePhotoOutsideBranch.response.status, 201);
+    const employeeOutsideBranchAudit = await apiRequest(baseUrl, `/audit?resourceType=File&action=FILE_UPLOADED&resourceId=${employeePhotoOutsideBranch.body.item.id}`, { accessToken: recipientToken });
+    assert.equal(employeeOutsideBranchAudit.response.status, 200);
+    assert.equal(employeeOutsideBranchAudit.body.total, 0, "El auditor no ve archivos de empleados que no están asignados actualmente a su sucursal.");
     const branchRoleAssignmentAudit = await apiRequest(baseUrl, `/audit?resourceType=RoleAssignment&action=ROLE_ASSIGNED&resourceId=${branchAuditAssignment.body.id}`, { accessToken: recipientToken });
     assert.equal(branchRoleAssignmentAudit.response.status, 200);
     assert.ok(branchRoleAssignmentAudit.body.items.some((event) => event.branchId === otherBranchId), "Los cambios de permisos incluyen su alcance de sucursal.");
