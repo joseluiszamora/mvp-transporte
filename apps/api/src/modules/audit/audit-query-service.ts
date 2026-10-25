@@ -80,11 +80,18 @@ const visibilitySql = `(
       AND assignment.branch_id = ANY($4::uuid[])
   ))
   OR (event.resource_type = 'File' AND EXISTS (
-    SELECT 1 FROM file_links AS link
-    JOIN employees AS employee ON employee.id = link.resource_id AND employee.organization_id = event.organization_id
-    JOIN employee_branch_assignments AS assignment ON assignment.employee_id = employee.id
-    WHERE link.file_id::text = event.resource_id AND link.resource_type IN ('EMPLOYEE_PHOTO', 'EMPLOYEE_DOCUMENT')
-      AND assignment.branch_id = ANY($4::uuid[])
+    SELECT 1 FROM employees AS employee
+    JOIN employee_branch_assignments AS assignment
+      ON assignment.employee_id = employee.id AND assignment.organization_id = employee.organization_id
+    WHERE employee.organization_id = event.organization_id AND assignment.branch_id = ANY($4::uuid[])
+      AND (
+        employee.id::text = COALESCE(event.diff->'after'->>'employeeId', event.diff->'before'->>'employeeId')
+        OR EXISTS (
+          SELECT 1 FROM file_links AS link
+          WHERE link.file_id::text = event.resource_id AND link.resource_id = employee.id
+            AND link.resource_type IN ('EMPLOYEE_PHOTO', 'EMPLOYEE_DOCUMENT')
+        )
+      )
   ))
 )`;
 
