@@ -228,7 +228,7 @@ async function recordFailure(
 }
 
 function retryDelay(email: ClaimedEmail, options: OutboxWorkerOptions): number {
-  const base = options.retryBaseMs ?? 1_000;
+  const base = options.retryBaseMs ?? 30_000;
   const maximum = options.retryMaximumMs ?? 3_600_000;
   if (!Number.isInteger(base) || base < 1 || !Number.isInteger(maximum) || maximum < 1) {
     throw new Error("Retry delays must be positive integer milliseconds.");
@@ -256,7 +256,7 @@ export async function processOutboxBatch(
   if (!Number.isInteger(leaseMs) || leaseMs < 1_000 || leaseMs > 900_000) {
     throw new Error("leaseMs must be an integer between 1000 and 900000.");
   }
-  const retryBaseMs = options.retryBaseMs ?? 1_000;
+  const retryBaseMs = options.retryBaseMs ?? 30_000;
   const retryMaximumMs = options.retryMaximumMs ?? 3_600_000;
   if (
     !Number.isInteger(retryBaseMs) ||

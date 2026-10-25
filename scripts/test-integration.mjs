@@ -479,6 +479,64 @@ async function verifyAuditAndEmail(database, smtpPort, mailpitHttpPort) {
   assert.ok(messageText.includes(activationToken), "El enlace de activación debe llegar al buzón local.");
   assert.ok(messageText.includes("Prueba local"));
 
+  const defaultRetryRecipient = `task003.default-retry.${marker}@example.test`;
+  const defaultRetryEmail = await enqueueEmail(
+    database,
+    {
+      organizationId: tenant.organization_id,
+      templateCode: "account.activation",
+      recipient: defaultRetryRecipient,
+      deduplicationKey: `task003-default-retry:${marker}`,
+      payload: { displayName: "Reintento predeterminado", actionUrl: "https://example.test/retry" },
+    },
+    encryptionKey,
+  );
+  const defaultFailure = await processOutboxBatch(database, failureSender, {
+    encryptionKey,
+    batchSize: 1,
+    leaseMs: 1_000,
+    random: () => 0,
+  });
+  assert.deepEqual(defaultFailure, { claimed: 1, sent: 0, failed: 1 });
+  const scheduledRetry = await database.query(
+    `SELECT status, attempts, last_error_code,
+       EXTRACT(EPOCH FROM (next_attempt_at - clock_timestamp())) * 1000 AS retry_delay_ms
+     FROM email_outbox WHERE id = $1::uuid`,
+    [defaultRetryEmail.id],
+  );
+  assert.equal(scheduledRetry.rows[0].status, "FAILED");
+  assert.equal(scheduledRetry.rows[0].attempts, 1);
+  assert.equal(scheduledRetry.rows[0].last_error_code, "ECONNECTION");
+  assert.ok(
+    Number(scheduledRetry.rows[0].retry_delay_ms) >= 20_000 &&
+      Number(scheduledRetry.rows[0].retry_delay_ms) <= 30_000,
+    "La política predeterminada debe programar el primer reintento alrededor de 30 segundos.",
+  );
+  for (let attempt = 2; attempt <= 5; attempt += 1) {
+    await database.query(
+      "UPDATE email_outbox SET next_attempt_at = CURRENT_TIMESTAMP WHERE id = $1::uuid",
+      [defaultRetryEmail.id],
+    );
+    const retryResult = await processOutboxBatch(database, failureSender, {
+      encryptionKey,
+      batchSize: 1,
+      leaseMs: 1_000,
+      random: () => 0,
+    });
+    assert.deepEqual(retryResult, { claimed: 1, sent: 0, failed: 1 });
+  }
+  const exhaustedDefaultRetry = await processOutboxBatch(database, failureSender, {
+    encryptionKey,
+    batchSize: 1,
+    leaseMs: 1_000,
+  });
+  assert.deepEqual(exhaustedDefaultRetry, { claimed: 0, sent: 0, failed: 0 });
+  const retryHistory = await database.query(
+    "SELECT status, attempts FROM email_outbox WHERE id = $1::uuid",
+    [defaultRetryEmail.id],
+  );
+  assert.deepEqual(retryHistory.rows[0], { status: "FAILED", attempts: 5 });
+
   const exhaustedRecipient = `task003.expired.${marker}@example.test`;
   const exhaustedKey = `task003-expired:${marker}`;
   const expiredEmail = await enqueueEmail(
