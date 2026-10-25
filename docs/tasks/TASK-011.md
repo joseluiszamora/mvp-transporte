@@ -1,5 +1,5 @@
 # TASK-011 — Consulta auditoría
-Estado: integrada técnicamente en `main` por PR #26; aceptación funcional pendiente. Dependencias: 010. Issue GitHub: [#11](https://github.com/joseluiszamora/mvp-transporte/issues/11) abierta.
+Estado: aceptada funcionalmente e integrada en `main` por PR #26. Dependencias: 010. Issue GitHub: [#11](https://github.com/joseluiszamora/mvp-transporte/issues/11) cerrada.
 ## Contexto
 Leer AGENTS.md y docs/product.md, architecture.md, data-model.md, security.md, access-matrix.md; consultar docs/modules/ relevantes. Criterios de módulo completan esta tarea.
 ## Objetivo y alcance
@@ -19,7 +19,7 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - Pruebas de integración implementadas para dos tenants y alcances de sucursal, usuario sin permiso, filtros, detalle, sanitización histórica y lectura/escritura sin edición. La ejecución local pasó con PostgreSQL y Mailpit desechables tras activar Docker Desktop.
 - Decisiones del propietario (19/10/2026): conservar todos los eventos de auditoría sin purga automática; para el permiso limitado a sucursal, incluir eventos de empleados asignados actualmente a esa sucursal. La visibilidad histórica sigue la asignación vigente.
 - Los eventos de archivos personales guardan el ID del empleado en el diff saneado para mantener ese alcance después de quitar el vínculo del archivo.
-- La Issue #11 permanece abierta. No declarar la tarea aceptada hasta completar decisiones, validación técnica y aceptación funcional.
+- El propietario confirmó la aceptación funcional de TASK-011 el 25/10/2026; Issue #11 cerrada como completada.
 ### Validación local (19/10/2026)
 - `npm run lint`: pasó sin advertencias.
 - `npm run typecheck`: pasó para contracts, API y web.
@@ -27,4 +27,5 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run build`: pasó; Vite informó un bundle web de 723.45 kB, sobre el umbral de 500 kB.
 - `npm run test:integration`: pasó con PostgreSQL/Mailpit desechables; aplicó las siete migraciones a la base efímera y completó la API. No se usó la base persistente local.
 - CI del head de PR #26 (run #34): aprobada para lint, typecheck, pruebas unitarias, build e integración PostgreSQL desechable. La integración confirma visibilidad de eventos de archivos personales tras desvincularlos y denegación para empleados fuera de la sucursal.
-- Pendiente: prueba manual de UI ADM-07 y aceptación funcional del propietario. La Issue #11 permanece abierta. No se usó la base persistente local ni se desplegó producción.
+- Aceptación funcional del propietario (25/10/2026): confirmó permisos con y sin `audit.read`, filtros/fechas/listado/detalle, aislamiento por organización y sucursal, eventos de empleados dentro/fuera de sucursal, consulta de solo lectura, sanitización de datos sensibles e historial disponible. Issue #11 cerrada como completada.
+- No se usó la base persistente local ni se desplegó producción.
