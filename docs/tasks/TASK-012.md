@@ -20,3 +20,9 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - El build advirtió que el bundle web de 735.73 kB supera el umbral informativo de 500 kB.
 - PR #27 se integró en `main` (merge commit `dd0b20c458e952b5c0af50df65e2ebf2674f90be`). CI #41 aprobó lint, typecheck, unitarias, build e integración PostgreSQL desechable para el head integrado. Prueba manual de ADM-09 y aceptación funcional del propietario pendientes. Issue #12 permanece abierta.
 - No se migró la base persistente local ni se desplegó producción.
+
+## Ajuste de reintentos SMTP (25/10/2026)
+- Hallazgo durante prueba manual: fallas de transporte agotaban los cinco intentos en unos 15 segundos, antes de que pudiera recuperarse Mailpit/SMTP.
+- Cambio propuesto: conserva cinco intentos totales y amplía el backoff inicial predeterminado a 30 segundos con jitter; la ventana acumulada pasa a aproximadamente 5m37s–9m23s. El límite por demora sigue siendo una hora.
+- Los mensajes ya agotados permanecen terminales para evitar reenviar enlaces posiblemente vencidos. La integración crea un evento nuevo, comprueba la programación del primer retry y valida que el máximo predeterminado siga en cinco intentos.
+- Pendiente: validar en Mailpit una falla temporal seguida de recuperación y aceptación funcional del propietario. La Issue #12 permanece abierta.
