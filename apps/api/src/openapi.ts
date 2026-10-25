@@ -485,6 +485,65 @@ export const openApiDocument = {
         responses: { "200": { description: "Número emitido y auditado.", content: { "application/json": { schema: { $ref: "#/components/schemas/IssuedNumber" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
       },
     },
+    "/api/v1/employees/scope-options": {
+      get: {
+        summary: "Lista empresas, sucursales, cargos, tipos de documento y cuentas disponibles dentro del alcance autorizado.", operationId: "listEmployeeScopeOptions", security: [{ bearerAuth: [] }],
+        responses: { "200": { description: "Opciones filtradas por permisos efectivos.", content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeScopeOptions" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/employees": {
+      get: {
+        summary: "Lista únicamente datos laborales mínimos de empleados en empresas y sucursales autorizadas.", operationId: "listEmployees", security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: "query", name: "search", schema: { type: "string", maxLength: 120 } },
+          { in: "query", name: "status", schema: { type: "string", enum: ["ACTIVE", "INACTIVE"] } },
+          { in: "query", name: "companyId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "branchId", schema: { type: "string", format: "uuid" } },
+          { in: "query", name: "limit", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } },
+          { in: "query", name: "offset", schema: { type: "integer", minimum: 0, default: 0 } },
+        ],
+        responses: { "200": { description: "Página laboral autorizada.", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfEmployees" } } } }, "403": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Crea un empleado sin exigir una cuenta de usuario.", operationId: "createEmployee", security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeCreate" } } } },
+        responses: { "201": { description: "Empleado creado.", content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeDetailsResponse" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "409": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/employees/{employeeId}": {
+      get: {
+        summary: "Consulta un empleado y agrega datos personales solo con employees.personal.read.", operationId: "getEmployee", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "employeeId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Detalle limitado por permisos.", content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeDetailsResponse" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      patch: {
+        summary: "Actualiza datos laborales, datos personales protegidos y asignaciones accesibles.", operationId: "updateEmployee", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "employeeId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeMutation" } } } },
+        responses: { "200": { description: "Empleado actualizado y auditado.", content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeDetailsResponse" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/employees/{employeeId}/documents": {
+      get: {
+        summary: "Lista documentos solo con employees.read, employee_documents.read y files.read.", operationId: "listEmployeeDocuments", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "employeeId", required: true, schema: { type: "string", format: "uuid" } }],
+        responses: { "200": { description: "Documentos privados del empleado.", content: { "application/json": { schema: { $ref: "#/components/schemas/EmployeeDocuments" } } } }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" } },
+      },
+      post: {
+        summary: "Carga documento privado y sus metadatos del catálogo vigente.", operationId: "uploadEmployeeDocument", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "employeeId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "multipart/form-data": { schema: { type: "object", required: ["file", "typeId"], properties: { file: { type: "string", format: "binary" }, typeId: { type: "string", format: "uuid" }, issuedAt: { type: "string", format: "date" }, expiresAt: { type: "string", format: "date" } }, additionalProperties: false } } } },
+        responses: { "201": { description: "Documento privado cargado.", content: { "application/json": { schema: { $ref: "#/components/schemas/StoredFileResponse" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "413": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
+    "/api/v1/employees/{employeeId}/photo": {
+      post: {
+        summary: "Carga o reemplaza la foto privada del empleado; acepta JPEG, PNG o WEBP.", operationId: "uploadEmployeePhoto", security: [{ bearerAuth: [] }],
+        parameters: [{ in: "path", name: "employeeId", required: true, schema: { type: "string", format: "uuid" } }],
+        requestBody: { required: true, content: { "multipart/form-data": { schema: { type: "object", required: ["file"], properties: { file: { type: "string", format: "binary" } }, additionalProperties: false } } } },
+        responses: { "201": { description: "Foto privada guardada.", content: { "application/json": { schema: { $ref: "#/components/schemas/StoredFileResponse" } } } }, "400": { $ref: "#/components/responses/ApiError" }, "403": { $ref: "#/components/responses/ApiError" }, "404": { $ref: "#/components/responses/ApiError" }, "413": { $ref: "#/components/responses/ApiError" } },
+      },
+    },
     "/api/v1/files/scope-options": {
       get: {
         summary: "Lista empresas y sucursales para las que los permisos de archivos y del recurso coinciden.", operationId: "listFileScopeOptions", security: [{ bearerAuth: [] }],
@@ -671,7 +730,100 @@ export const openApiDocument = {
       },
     },
     schemas: {
-      FileResourceType: { type: "string", enum: ["COMPANY_ATTACHMENT", "BRANCH_ATTACHMENT"] },
+      EmployeeListItem: {
+        type: "object", additionalProperties: false,
+        required: ["id", "companyId", "internalCode", "firstNames", "lastNames", "position", "hireDate", "status", "branches"],
+        properties: {
+          id: { type: "string", format: "uuid" }, companyId: { type: "string", format: "uuid" }, internalCode: { type: "string" },
+          firstNames: { type: "string" }, lastNames: { type: "string" }, hireDate: { type: "string", format: "date" },
+          status: { type: "string", enum: ["ACTIVE", "INACTIVE"] },
+          position: { oneOf: [{ $ref: "#/components/schemas/EmployeeCatalogItem" }, { type: "null" }] },
+          branches: { type: "array", items: { $ref: "#/components/schemas/EmployeeBranch" } },
+        },
+      },
+      EmployeeCatalogItem: { type: "object", additionalProperties: false, required: ["id", "code", "name"], properties: { id: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" } } },
+      EmployeeBranch: { type: "object", additionalProperties: false, required: ["id", "code", "name"], properties: { id: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" } } },
+      EmployeeDetails: {
+        allOf: [{ $ref: "#/components/schemas/EmployeeListItem" }, {
+          type: "object", additionalProperties: false,
+          required: ["canReadPersonalData", "canReadLinkedUser", "canManageUserLink", "canUpdate", "canUpdateSharedFields", "canDeactivate", "canManagePersonalData", "canReadPhoto", "canManagePhoto", "canDeletePhoto", "canReadDocuments", "canDownloadDocuments", "canManageDocuments", "canDeleteDocuments"],
+          properties: {
+            canReadPersonalData: { type: "boolean" }, canReadLinkedUser: { type: "boolean" }, canManageUserLink: { type: "boolean" }, canUpdate: { type: "boolean" }, canUpdateSharedFields: { type: "boolean" }, canDeactivate: { type: "boolean" },
+            canManagePersonalData: { type: "boolean" }, canReadPhoto: { type: "boolean" }, canManagePhoto: { type: "boolean" }, canDeletePhoto: { type: "boolean" },
+            canReadDocuments: { type: "boolean" }, canDownloadDocuments: { type: "boolean" }, canManageDocuments: { type: "boolean" }, canDeleteDocuments: { type: "boolean" },
+            personalData: { type: "object", additionalProperties: false, properties: { documentNumber: { type: ["string", "null"] }, phone: { type: ["string", "null"] }, email: { type: ["string", "null"] }, address: { type: ["string", "null"] } } },
+            linkedUser: { oneOf: [{ type: "object", additionalProperties: false, required: ["id", "displayName", "email", "membershipStatus"], properties: { id: { type: "string", format: "uuid" }, displayName: { type: "string" }, email: { type: "string", format: "email" }, membershipStatus: { type: "string", enum: ["INVITED", "ACTIVE", "SUSPENDED"] } } }, { type: "null" }] },
+            photoFileId: { type: ["string", "null"], format: "uuid" },
+          },
+        }],
+      },
+      EmployeeDetailsResponse: { type: "object", additionalProperties: false, required: ["item"], properties: { item: { $ref: "#/components/schemas/EmployeeDetails" } } },
+      PageOfEmployees: { type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"], properties: { items: { type: "array", items: { $ref: "#/components/schemas/EmployeeListItem" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } } },
+      EmployeeMutation: {
+        type: "object", additionalProperties: false,
+        properties: {
+          companyId: { type: "string", format: "uuid" },
+          internalCode: { type: "string", minLength: 1, maxLength: 60 }, firstNames: { type: "string", minLength: 1, maxLength: 120 }, lastNames: { type: "string", minLength: 1, maxLength: 120 },
+          personalDocumentNumber: { type: ["string", "null"], maxLength: 80 }, personalPhone: { type: ["string", "null"], maxLength: 40 }, personalEmail: { type: ["string", "null"], format: "email", maxLength: 320 }, personalAddress: { type: ["string", "null"], maxLength: 500 },
+          positionId: { type: ["string", "null"], format: "uuid" }, hireDate: { type: "string", format: "date" }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] }, userId: { type: ["string", "null"], format: "uuid" },
+          branchIds: { type: "array", maxItems: 100, uniqueItems: true, items: { type: "string", format: "uuid" } },
+        },
+      },
+      EmployeeCreate: {
+        allOf: [{ $ref: "#/components/schemas/EmployeeMutation" }, {
+          type: "object", required: ["companyId", "internalCode", "firstNames", "lastNames", "hireDate"],
+        }],
+      },
+      EmployeeScopeOptions: {
+        type: "object", additionalProperties: false, required: ["companies", "positions", "documentTypes", "users"],
+        properties: {
+          companies: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false, required: ["id", "legalName", "canCreate", "canUpdate", "branches"],
+              properties: {
+                id: { type: "string", format: "uuid" }, legalName: { type: "string" }, canCreate: { type: "boolean" }, canUpdate: { type: "boolean" },
+                branches: {
+                  type: "array",
+                  items: {
+                    type: "object", additionalProperties: false, required: ["id", "code", "name", "canCreate", "canUpdate"],
+                    properties: { id: { type: "string", format: "uuid" }, code: { type: "string" }, name: { type: "string" }, canCreate: { type: "boolean" }, canUpdate: { type: "boolean" } },
+                  },
+                },
+              },
+            },
+          },
+          positions: { type: "array", items: { $ref: "#/components/schemas/EmployeeCatalogItem" } },
+          documentTypes: { type: "array", items: { $ref: "#/components/schemas/EmployeeCatalogItem" } },
+          users: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false, required: ["id", "displayName", "email", "membershipStatus"],
+              properties: { id: { type: "string", format: "uuid" }, displayName: { type: "string" }, email: { type: "string", format: "email" }, membershipStatus: { type: "string", enum: ["INVITED", "ACTIVE", "SUSPENDED"] } },
+            },
+          },
+        },
+      },
+      EmployeeDocuments: {
+        type: "object", additionalProperties: false, required: ["items", "canDownload"],
+        properties: {
+          canDownload: { type: "boolean" },
+          items: {
+            type: "array",
+            items: {
+              type: "object", additionalProperties: false,
+              required: ["id", "fileId", "type", "originalName", "detectedMime", "bytes", "issuedAt", "expiresAt", "createdAt"],
+              properties: {
+                id: { type: "string", format: "uuid" }, fileId: { type: "string", format: "uuid" }, type: { $ref: "#/components/schemas/EmployeeCatalogItem" },
+                originalName: { type: "string" }, detectedMime: { type: "string", enum: ["application/pdf", "image/jpeg", "image/png", "image/webp"] },
+                bytes: { type: "integer" }, issuedAt: { type: ["string", "null"], format: "date" }, expiresAt: { type: ["string", "null"], format: "date" },
+                createdAt: { type: "string", format: "date-time" },
+              },
+            },
+          },
+        },
+      },
+      FileResourceType: { type: "string", enum: ["COMPANY_ATTACHMENT", "BRANCH_ATTACHMENT", "EMPLOYEE_PHOTO", "EMPLOYEE_DOCUMENT"] },
       FileScopeOption: {
         type: "object", additionalProperties: false,
         required: ["resourceType", "resourceId", "companyId", "branchId", "label", "canRead", "canDownload", "canUpload", "canDelete"],

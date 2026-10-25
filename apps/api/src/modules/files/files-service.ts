@@ -7,7 +7,7 @@ import { appendAuditEvent } from "../audit/audit-service.ts";
 import { AuthServiceError, type AuthenticatedSession } from "../auth/auth-service.ts";
 import { getStoredFilePath, removeStoredPath } from "./file-storage.ts";
 
-export type FileResourceType = "COMPANY_ATTACHMENT" | "BRANCH_ATTACHMENT";
+export type FileResourceType = "COMPANY_ATTACHMENT" | "BRANCH_ATTACHMENT" | "EMPLOYEE_PHOTO" | "EMPLOYEE_DOCUMENT";
 export type FileResourceAction = "read" | "write";
 
 interface ResourceTarget extends AccessTarget {
@@ -18,6 +18,9 @@ interface ResourceTarget extends AccessTarget {
   companyStatus: string;
   branchStatus: string | null;
   label: string;
+  employeeId?: string | null;
+  employeeStatus?: string | null;
+  assignedBranchIds?: string[];
 }
 
 interface ResourceRow extends QueryResultRow {
@@ -30,6 +33,8 @@ interface ResourceRow extends QueryResultRow {
   company_status: string;
   branch_status: string | null;
   label: string;
+  employee_status?: string | null;
+  assigned_branch_ids?: string[];
 }
 
 interface FileRow extends QueryResultRow {
@@ -54,6 +59,12 @@ export interface UploadedFileContent {
   detectedMime: string;
   bytes: number;
   sha256: string;
+}
+
+export interface EmployeeDocumentUpload {
+  typeId: string;
+  issuedAt: string | null;
+  expiresAt: string | null;
 }
 
 function requireOrganizationId(session: AuthenticatedSession): string {
@@ -120,25 +131,71 @@ async function loadResourceTarget(
     };
   }
 
+  if (resourceType === "EMPLOYEE_PHOTO" || resourceType === "EMPLOYEE_DOCUMENT") {
+    const result = await database.query<ResourceRow>(
+      `SELECT employee.id::text AS resource_id, organization.id::text AS organization_id,
+          company.id::text AS company_id, organization.status AS organization_status, company.status AS company_status,
+          employee.internal_code AS label, employee.status AS employee_status,
+          COALESCE((SELECT array_agg(branch.id::text ORDER BY branch.id)
+            FROM employee_branch_assignments AS assignment JOIN branches AS branch ON branch.id = assignment.branch_id
+              AND branch.company_id = employee.company_id AND branch.organization_id = employee.organization_id
+            WHERE assignment.employee_id = employee.id AND branch.status = 'ACTIVE'), ARRAY[]::text[]) AS assigned_branch_ids
+       FROM employees AS employee
+       JOIN organizations AS organization ON organization.id = employee.organization_id
+       JOIN companies AS company ON company.id = employee.company_id AND company.organization_id = employee.organization_id
+       WHERE employee.id = $1::uuid AND organization.id = $2::uuid
+       ${lock ? "FOR SHARE OF organization, company, employee" : ""}`,
+      [resourceId, organizationId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new AuthServiceError(404, "FILE_RESOURCE_NOT_FOUND", "El recurso asociado no está disponible.");
+    return {
+      resourceType, resourceId: row.resource_id, scopeType: "COMPANY", organizationId: row.organization_id,
+      companyId: row.company_id, branchId: null, organizationStatus: row.organization_status,
+      companyStatus: row.company_status, branchStatus: null, label: row.label,
+      employeeId: row.resource_id, employeeStatus: row.employee_status ?? null, assignedBranchIds: row.assigned_branch_ids ?? [],
+    };
+  }
+
   throw new AuthServiceError(400, "INVALID_FILE_RESOURCE", "El tipo de recurso no está permitido.");
 }
 
 function resourceReadPermission(target: ResourceTarget): string {
+  if (target.employeeId) return "employees.read";
   return target.scopeType === "COMPANY" ? "companies.read" : "branches.read";
 }
 
 function resourceWritePermission(target: ResourceTarget): string {
+  if (target.employeeId) return "employees.update";
   return target.scopeType === "COMPANY" ? "companies.update" : "branches.update";
 }
 
+function hasResourcePermission(context: AccessContext, permission: string, target: ResourceTarget): boolean {
+  if (!target.employeeId) return hasPermission(context, permission, target);
+  const companyTarget = { organizationId: target.organizationId, companyId: target.companyId };
+  return hasPermission(context, permission, companyTarget) || (target.assignedBranchIds ?? []).some((branchId) =>
+    hasPermission(context, permission, { ...companyTarget, branchId }),
+  );
+}
+
 function requireFilePermission(context: AccessContext, permission: string, target: ResourceTarget): void {
-  if (!hasPermission(context, permission, target)) {
+  if (!hasResourcePermission(context, permission, target)) {
     throw new AuthServiceError(403, "FORBIDDEN", "No tienes permiso para esta operación en el recurso asociado.");
+  }
+  if (!target.employeeId) return;
+  if (permission === "files.read" || permission === "files.download" || permission === "employees.read") {
+    if (!hasResourcePermission(context, "employees.read", target)) throw new AuthServiceError(403, "FORBIDDEN", "No tienes permiso para consultar los datos laborales asociados.");
+    const specific = target.resourceType === "EMPLOYEE_DOCUMENT" ? "employee_documents.read" : "employees.personal.read";
+    if (!hasResourcePermission(context, specific, target)) throw new AuthServiceError(403, "FORBIDDEN", "No tienes permiso para consultar este archivo personal.");
+  }
+  if (permission === "files.upload" || permission === "files.delete" || permission === "employees.update") {
+    const specific = target.resourceType === "EMPLOYEE_DOCUMENT" ? "employee_documents.manage" : "employees.personal.read";
+    if (!hasResourcePermission(context, specific, target)) throw new AuthServiceError(403, "FORBIDDEN", "No tienes permiso para gestionar este archivo personal.");
   }
 }
 
 function assertWritableTarget(target: ResourceTarget): void {
-  if (target.organizationStatus !== "ACTIVE" || target.companyStatus !== "ACTIVE" || target.branchStatus === "INACTIVE") {
+  if (target.organizationStatus !== "ACTIVE" || target.companyStatus !== "ACTIVE" || target.branchStatus === "INACTIVE" || target.employeeStatus === "INACTIVE") {
     throw new AuthServiceError(409, "FILE_RESOURCE_INACTIVE", "El recurso inactivo no admite cambios de archivos.");
   }
 }
@@ -250,8 +307,13 @@ async function inTransaction<T>(database: Pool, action: (client: PoolClient) => 
 export async function storeUploadedFile(
   database: Pool,
   session: AuthenticatedSession,
-  input: { storageRoot: string; resourceType: FileResourceType; resourceId: string; content: UploadedFileContent; requestId: string },
+  input: { storageRoot: string; resourceType: FileResourceType; resourceId: string; content: UploadedFileContent; requestId: string; document?: EmployeeDocumentUpload },
 ) {
+  if (input.resourceType === "EMPLOYEE_DOCUMENT" && !input.document) throw new AuthServiceError(400, "EMPLOYEE_DOCUMENT_METADATA_REQUIRED", "Indica el tipo y las fechas del documento.");
+  if (input.resourceType !== "EMPLOYEE_DOCUMENT" && input.document) throw new AuthServiceError(400, "INVALID_FILE_RESOURCE", "Los metadatos de documento no corresponden a este archivo.");
+  if (input.resourceType === "EMPLOYEE_PHOTO" && !["image/jpeg", "image/png", "image/webp"].includes(input.content.detectedMime)) {
+    throw new AuthServiceError(400, "INVALID_EMPLOYEE_PHOTO", "La foto debe ser JPEG, PNG o WEBP.");
+  }
   const id = randomUUID();
   const storageKey = randomUUID();
   const finalPath = getStoredFilePath(input.storageRoot, storageKey);
@@ -264,6 +326,32 @@ export async function storeUploadedFile(
       requireFilePermission(context, "files.upload", target);
       requireFilePermission(context, resourceWritePermission(target), target);
       assertWritableTarget(target);
+      if (input.resourceType === "EMPLOYEE_DOCUMENT" && input.document) {
+        const typeResult = await client.query<{
+          available: boolean;
+          scope: "GLOBAL" | "ORGANIZATION" | "COMPANY";
+          catalog_organization_id: string | null;
+          catalog_company_id: string | null;
+        }>(
+          `SELECT item.status = 'ACTIVE' AND catalog.status = 'ACTIVE'
+              AND (catalog.scope = 'GLOBAL' OR
+                (catalog.scope = 'ORGANIZATION' AND catalog.organization_id = $2::uuid) OR
+                (catalog.scope = 'COMPANY' AND catalog.organization_id = $2::uuid AND catalog.company_id = $3::uuid)) AS available,
+              catalog.scope, catalog.organization_id AS catalog_organization_id, catalog.company_id AS catalog_company_id
+           FROM catalog_items AS item JOIN catalogs AS catalog ON catalog.id = item.catalog_id
+           WHERE item.id = $1::uuid AND catalog.code = 'EMPLOYEE_DOCUMENT_TYPE'`,
+          [input.document.typeId, target.organizationId, target.companyId],
+        );
+        const documentType = typeResult.rows[0];
+        if (!documentType?.available) throw new AuthServiceError(400, "INVALID_EMPLOYEE_DOCUMENT_TYPE", "El tipo de documento no está activo o disponible para la empresa.");
+        const canReadCatalog = documentType.scope === "GLOBAL"
+          ? context.grants.some((grant) => grant.permissionCode === "catalogs.read" && grant.organizationId === target.organizationId)
+          : documentType.scope === "ORGANIZATION"
+            ? documentType.catalog_organization_id === target.organizationId && hasPermission(context, "catalogs.read", { organizationId: target.organizationId })
+            : documentType.catalog_organization_id === target.organizationId && documentType.catalog_company_id === target.companyId
+              && hasPermission(context, "catalogs.read", { organizationId: target.organizationId, companyId: target.companyId });
+        if (!canReadCatalog) throw new AuthServiceError(403, "FORBIDDEN", "No tienes permiso para consultar el catálogo de tipos documentales en este alcance.");
+      }
       const inserted = await client.query<FileRow>(
         `INSERT INTO files (
            id, organization_id, company_id, branch_id, storage_key, original_name, detected_mime,
@@ -282,6 +370,25 @@ export async function storeUploadedFile(
          VALUES ($1::uuid, $2::uuid, $3::"FileResourceType", $4::uuid, CURRENT_TIMESTAMP)`,
         [randomUUID(), id, input.resourceType, input.resourceId],
       );
+      if (input.resourceType === "EMPLOYEE_PHOTO") {
+        const current = await client.query<{ photo_file_id: string | null }>(
+          "SELECT photo_file_id FROM employees WHERE id = $1::uuid AND organization_id = $2::uuid FOR UPDATE",
+          [input.resourceId, target.organizationId],
+        );
+        const previousFileId = current.rows[0]?.photo_file_id;
+        await client.query("UPDATE employees SET photo_file_id = $1::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = $2::uuid AND organization_id = $3::uuid", [id, input.resourceId, target.organizationId]);
+        if (previousFileId) {
+          await client.query("DELETE FROM file_links WHERE file_id = $1::uuid", [previousFileId]);
+          await client.query("UPDATE files SET status = 'DELETE_PENDING', delete_requested_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1::uuid AND status = 'ACTIVE'", [previousFileId]);
+        }
+      }
+      if (input.resourceType === "EMPLOYEE_DOCUMENT" && input.document) {
+        await client.query(
+          `INSERT INTO employee_documents (id, organization_id, company_id, employee_id, file_id, type_id, issued_at, expires_at, uploaded_by, created_at)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::uuid, $7::date, $8::date, $9::uuid, CURRENT_TIMESTAMP)`,
+          [randomUUID(), target.organizationId, target.companyId, input.resourceId, id, input.document.typeId, input.document.issuedAt, input.document.expiresAt, session.userId],
+        );
+      }
       await appendAuditEvent(client, {
         organizationId: target.organizationId, companyId: target.companyId, branchId: target.branchId,
         actor: { type: "USER", userId: session.userId }, action: "FILE_UPLOADED", resourceType: "File", resourceId: id,
@@ -389,6 +496,11 @@ export async function requestFileDeletion(database: Pool, session: Authenticated
     requireFilePermission(latestContext, "files.delete", latestTarget);
     requireFilePermission(latestContext, resourceWritePermission(latestTarget), latestTarget);
     assertWritableTarget(latestTarget);
+    if (current.resource_type === "EMPLOYEE_PHOTO") {
+      await client.query("UPDATE employees SET photo_file_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1::uuid AND photo_file_id = $2::uuid", [current.resource_id, fileId]);
+    } else if (current.resource_type === "EMPLOYEE_DOCUMENT") {
+      await client.query("DELETE FROM employee_documents WHERE file_id = $1::uuid", [fileId]);
+    }
     await client.query("DELETE FROM file_links WHERE file_id = $1::uuid", [fileId]);
     await client.query("UPDATE files SET status = 'DELETE_PENDING', delete_requested_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1::uuid", [fileId]);
     await appendAuditEvent(client, {

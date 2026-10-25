@@ -29,8 +29,15 @@ Tokens activación y recuperación: aleatorios fuertes, hash almacenado, un solo
 - El driver local escribe fuera del directorio estático web. Los nombres originales solo son metadatos; las rutas usan claves UUID aleatorias y el cliente no puede elegir rutas ni tipos de recurso.
 - La lista de destinos contiene únicamente empresas/sucursales del tenant seleccionado. Adjuntos de empresa requieren `files.*` y el permiso `companies.*` correspondiente; adjuntos de sucursal requieren `files.*` y `branches.*` sobre esa sucursal. La API vuelve a cargar el recurso y recalcula permisos para cada consulta, carga, descarga y eliminación.
 - La carga valida un único campo `file`, extensión, MIME declarado y firma del contenido; admite PDF/JPEG/PNG/WEBP hasta 10 MiB. Los archivos servidos se transmiten solo tras autorización y usan `nosniff`, CSP restrictiva, descarga forzada y `no-store`.
-- Los enlaces tienen tipos explícitos para empresas y sucursales; un UUID arbitrario o `EMPLOYEE_DOCUMENT` no se acepta. Los documentos personales quedan inaccesibles hasta que ADM-05 registre su política y los permisos de documentos. La migración vincula file, tenant, empresa y sucursal con claves foráneas y trigger de consistencia.
+- Los enlaces tienen tipos explícitos para empresas, sucursales, fotos y documentos laborales. La API de archivos no permite crear documentos de empleado sin la ruta ADM-05 y sus metadatos. Las claves foráneas compuestas y un trigger validan recurso, tenant, empresa, estado y tipo de imagen.
 - La eliminación lógica quita el enlace y conserva bytes por 24 horas; la purga elimina solo filas pendientes sin enlaces vencidas, registra auditoría como `SYSTEM` y no borra archivos físicos con metadatos o enlaces vigentes. Los temporales y archivos sin metadatos se eliminan después del mismo periodo.
+
+## Personal (TASK-010)
+
+- `employees.read` devuelve únicamente campos laborales. Identificación, teléfono, correo y domicilio solo se incluyen con `employees.personal.read`; el vínculo de usuario exige además `users.read` y una membresía de la misma organización. Vincular una cuenta no concede acceso a la aplicación.
+- La consulta de metadatos de documentos exige `employees.read`, `employee_documents.read` y `files.read`; descargar bytes exige también `files.download`. Cargar requiere `employees.update`, `files.upload`, `employee_documents.manage` y permiso de lectura del catálogo de tipos en el alcance del catálogo. La eliminación requiere los permisos equivalentes de gestión y `files.delete`.
+- Fotos personales requieren `employees.personal.read` además del permiso de archivo y del permiso laboral aplicables. Se admiten solo JPEG, PNG y WEBP; los documentos usan los tipos activos del catálogo correspondiente.
+- Los grants de sucursal se aplican únicamente a empleados asignados a una sucursal activa que el actor puede consultar. Un actor con solo alcance de sucursal puede administrar esa asignación, pero los campos laborales compartidos requieren actualización a nivel de empresa u organización; las asignaciones ajenas a su alcance se preservan.
 
 ## Implementación de TASK-004 (15/10/2026)
 

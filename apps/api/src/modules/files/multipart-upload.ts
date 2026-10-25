@@ -15,7 +15,11 @@ import {
 } from "./file-storage.ts";
 import type { UploadedFileContent } from "./files-service.ts";
 
-export async function receiveMultipartUpload(request: Request, storageRoot: string): Promise<UploadedFileContent> {
+export async function receiveMultipartUpload(
+  request: Request,
+  storageRoot: string,
+  options: { allowedFields?: readonly string[] } = {},
+): Promise<UploadedFileContent & { fields: Record<string, string> }> {
   if (!request.is("multipart/form-data")) {
     throw new AuthServiceError(400, "INVALID_MULTIPART", "La carga debe usar multipart/form-data.");
   }
@@ -26,12 +30,13 @@ export async function receiveMultipartUpload(request: Request, storageRoot: stri
   await ensureFileStorageDirectories(storageRoot);
   const tempPath = join(storageRoot, ".tmp", `${randomUUID()}.tmp`);
 
-  return new Promise<UploadedFileContent>((resolveUpload, rejectUpload) => {
+  return new Promise<UploadedFileContent & { fields: Record<string, string> }>((resolveUpload, rejectUpload) => {
     let settled = false;
     let seenFile = false;
     let failure: unknown;
     let uploadTask: Promise<void> = Promise.resolve();
     let content: UploadedFileContent | undefined;
+    const fields: Record<string, string> = {};
     let parser: ReturnType<typeof busboy>;
 
     const fail = (error: unknown): void => {
@@ -44,7 +49,7 @@ export async function receiveMultipartUpload(request: Request, storageRoot: stri
         if (failure) throw failure;
         if (!seenFile || !content) throw new AuthServiceError(400, "FILE_REQUIRED", "Selecciona un archivo para cargar.");
         settled = true;
-        resolveUpload(content);
+        resolveUpload({ ...content, fields });
       } catch (error) {
         settled = true;
         await removeStoredPath(tempPath).catch(() => undefined);
@@ -56,7 +61,7 @@ export async function receiveMultipartUpload(request: Request, storageRoot: stri
       parser = busboy({
         headers: request.headers,
         preservePath: true,
-        limits: { fieldNameSize: 32, fieldSize: 0, fields: 0, fileSize: maximumFileBytes + 1, files: 1, parts: 2, headerPairs: 32 },
+        limits: { fieldNameSize: 32, fieldSize: 512, fields: 1 + (options.allowedFields?.length ?? 0), fileSize: maximumFileBytes + 1, files: 1, parts: 2 + (options.allowedFields?.length ?? 0), headerPairs: 32 },
       });
     } catch {
       void removeStoredPath(tempPath);
@@ -110,7 +115,13 @@ export async function receiveMultipartUpload(request: Request, storageRoot: stri
         })
         .catch((error: unknown) => fail(error));
     });
-    parser.on("field", () => fail(new AuthServiceError(400, "INVALID_MULTIPART", "No se permiten campos adicionales en la carga.")));
+    parser.on("field", (name, value) => {
+      if (!options.allowedFields?.includes(name) || Object.hasOwn(fields, name)) {
+        fail(new AuthServiceError(400, "INVALID_MULTIPART", "La carga contiene campos no permitidos o duplicados."));
+        return;
+      }
+      fields[name] = value;
+    });
     parser.on("partsLimit", () => fail(new AuthServiceError(400, "INVALID_MULTIPART", "La solicitud contiene más partes de las permitidas.")));
     parser.on("filesLimit", () => fail(new AuthServiceError(400, "INVALID_MULTIPART", "La solicitud debe contener un solo archivo.")));
     parser.on("fieldsLimit", () => fail(new AuthServiceError(400, "INVALID_MULTIPART", "No se permiten campos adicionales en la carga.")));

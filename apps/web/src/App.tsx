@@ -40,9 +40,32 @@ import { RolesPage } from "./features/roles/RolesPage";
 import { CatalogsPage } from "./features/catalogs/CatalogsPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { FilesPage } from "./features/files/FilesPage";
+import { EmployeesPage } from "./features/employees/EmployeesPage";
 
 const drawerWidth = 272;
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, retry: 1 } } });
+const themeModeStorageKey = "mvp-transporte.theme-mode";
+type ThemeMode = "light" | "dark";
+
+function readThemeMode(): ThemeMode {
+  try {
+    const savedMode = window.localStorage.getItem(themeModeStorageKey);
+    if (savedMode === "light" || savedMode === "dark") {
+      return savedMode;
+    }
+  } catch {
+    // Keep the light default when browser storage is unavailable.
+  }
+  return "light";
+}
+
+function saveThemeMode(mode: ThemeMode): void {
+  try {
+    window.localStorage.setItem(themeModeStorageKey, mode);
+  } catch {
+    // Theme changes still work for the current page when storage is unavailable.
+  }
+}
 
 const modules = [
   { code: "ADM-01", name: "Empresas y sucursales" },
@@ -98,12 +121,13 @@ function NavigationContent({ onNavigate }: { onNavigate?: () => void }): React.J
     { label: "Resumen", path: "/" },
     ...(user?.permissions.includes("users.read") ? [{ label: "ADM-02 · Usuarios", path: "/modules/ADM-02" }] : []),
     ...(user?.permissions.includes("roles.read") ? [{ label: "ADM-04 · Roles y permisos", path: "/modules/ADM-04" }] : []),
+    ...(user?.permissions.includes("employees.read") || user?.permissions.includes("employees.create") ? [{ label: "ADM-05 · Personal", path: "/modules/ADM-05" }] : []),
     ...(user?.permissions.includes("settings.read") ? [{ label: "ADM-06 · Configuración", path: "/modules/ADM-06" }] : []),
     ...(user?.permissions.some((permission) => permission.startsWith("files.")) ? [{ label: "ADM-08 · Archivos privados", path: "/modules/ADM-08" }] : []),
     ...(user?.platformAdmin ? [{ label: "Organizaciones de plataforma", path: "/platform/organizations" }] : []),
     ...(user?.platformAdmin ? [{ label: "Nueva organización", path: "/platform/organizations/new" }] : []),
     ...(user?.platformAdmin ? [{ label: "Configuración de instalación", path: "/platform/settings" }] : []),
-    ...modules.filter((module) => module.code !== "ADM-02" && module.code !== "ADM-04" && module.code !== "ADM-06" && module.code !== "ADM-08").map((module) => ({ label: `${module.code} · ${module.name}`, path: `/modules/${module.code}` })),
+    ...modules.filter((module) => module.code !== "ADM-02" && module.code !== "ADM-04" && module.code !== "ADM-05" && module.code !== "ADM-06" && module.code !== "ADM-08").map((module) => ({ label: `${module.code} · ${module.name}`, path: `/modules/${module.code}` })),
   ];
   return (
     <Box component="nav" aria-label="Navegación principal" sx={{ px: 1.5, py: 2 }}>
@@ -137,7 +161,7 @@ function Dashboard(): React.JSX.Element {
         <Paper component="section" variant="outlined" sx={{ flex: "1 1 220px", p: 2.5 }}><Typography color="text.secondary" variant="overline">PLATAFORMA</Typography><Typography sx={{ fontWeight: 700, mt: 0.5 }} variant="h5">Base administrativa</Typography><Typography color="text.secondary" variant="body2">Instalación independiente para organizaciones y empresas.</Typography></Paper>
         <Box sx={{ flex: "2 1 360px", minWidth: 0 }}><ApiStatusCard /></Box>
       </Box>
-      <Box component="section" aria-labelledby="modules-heading"><Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}><Typography component="h2" id="modules-heading" variant="h6">Módulos</Typography><Chip label="En implementación" size="small" variant="outlined" /></Stack><Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>{modules.map((module) => { const available = (module.code === "ADM-01" && (user?.permissions.includes("companies.read") || user?.permissions.includes("branches.read"))) || (module.code === "ADM-02" && user?.permissions.includes("users.read")) || (module.code === "ADM-04" && user?.permissions.includes("roles.read")) || (module.code === "ADM-06" && user?.permissions.includes("settings.read")) || (module.code === "ADM-08" && user?.permissions.some((permission) => permission.startsWith("files."))) || (module.code === "ADM-10" && user?.permissions.includes("catalogs.read")); return <Card key={module.code} variant="outlined" sx={{ flex: "1 1 220px" }}><CardContent><Typography color="text.secondary" variant="overline">{module.code}</Typography><Typography sx={{ fontWeight: 600 }} variant="body1">{module.name}</Typography><Chip label={available ? "Disponible" : "En preparación"} color={available ? "success" : "default"} size="small" sx={{ mt: 1.5 }} variant="outlined" /></CardContent></Card>; })}</Box></Box>
+      <Box component="section" aria-labelledby="modules-heading"><Stack direction="row" sx={{ alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}><Typography component="h2" id="modules-heading" variant="h6">Módulos</Typography><Chip label="En implementación" size="small" variant="outlined" /></Stack><Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>{modules.map((module) => { const available = (module.code === "ADM-01" && (user?.permissions.includes("companies.read") || user?.permissions.includes("branches.read"))) || (module.code === "ADM-02" && user?.permissions.includes("users.read")) || (module.code === "ADM-04" && user?.permissions.includes("roles.read")) || (module.code === "ADM-05" && (user?.permissions.includes("employees.read") || user?.permissions.includes("employees.create"))) || (module.code === "ADM-06" && user?.permissions.includes("settings.read")) || (module.code === "ADM-08" && user?.permissions.some((permission) => permission.startsWith("files."))) || (module.code === "ADM-10" && user?.permissions.includes("catalogs.read")); return <Card key={module.code} variant="outlined" sx={{ flex: "1 1 220px" }}><CardContent><Typography color="text.secondary" variant="overline">{module.code}</Typography><Typography sx={{ fontWeight: 600 }} variant="body1">{module.name}</Typography><Chip label={available ? "Disponible" : "En preparación"} color={available ? "success" : "default"} size="small" sx={{ mt: 1.5 }} variant="outlined" /></CardContent></Card>; })}</Box></Box>
     </Stack>
   );
 }
@@ -149,6 +173,7 @@ function ModulePage(): React.JSX.Element {
   if (module.code === "ADM-01") return <TenantOrganizationsPage />;
   if (module.code === "ADM-02") return <UsersPage />;
   if (module.code === "ADM-04") return <RolesPage />;
+  if (module.code === "ADM-05") return <EmployeesPage />;
   if (module.code === "ADM-10") return <CatalogsPage />;
   if (module.code === "ADM-06") return <SettingsPage />;
   if (module.code === "ADM-08") return <FilesPage />;
@@ -204,11 +229,17 @@ function ApplicationRoutes({ mode, onToggleMode }: { mode: "light" | "dark"; onT
 }
 
 export function App(): React.JSX.Element {
-  const [mode, setMode] = useState<"light" | "dark">("light");
+  const [mode, setMode] = useState<ThemeMode>(readThemeMode);
+  const toggleMode = (): void => {
+    const nextMode = mode === "light" ? "dark" : "light";
+    saveThemeMode(nextMode);
+    setMode(nextMode);
+  };
   const theme = useMemo(() => createTheme({
     palette: { mode, primary: { main: mode === "light" ? "#0f766e" : "#5eead4" }, background: { default: mode === "light" ? "#f5f8f7" : "#101716", paper: mode === "light" ? "#ffffff" : "#18211f" } },
     shape: { borderRadius: 12 },
     typography: { fontFamily: '"Inter", "Segoe UI", "Roboto", sans-serif' },
   }), [mode]);
-  return <ThemeProvider theme={theme}><CssBaseline /><QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><ApplicationRoutes mode={mode} onToggleMode={() => setMode((current) => current === "light" ? "dark" : "light")} /></BrowserRouter></AuthProvider></QueryClientProvider></ThemeProvider>;
+  return <ThemeProvider theme={theme}><CssBaseline /><QueryClientProvider client={queryClient}><AuthProvider><BrowserRouter><ApplicationRoutes mode={mode} onToggleMode={toggleMode} /></BrowserRouter></AuthProvider></QueryClientProvider></ThemeProvider>;
 }
+

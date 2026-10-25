@@ -87,6 +87,8 @@ enum FileStatus {
 enum FileResourceType {
   COMPANY_ATTACHMENT
   BRANCH_ATTACHMENT
+  EMPLOYEE_PHOTO
+  EMPLOYEE_DOCUMENT
 }
 
 model Organization {
@@ -106,6 +108,7 @@ model Organization {
   businessHours BusinessHour[]
   numberSequences NumberSequence[]
   files        File[]
+  employees    Employee[]
 
   @@map("organizations")
 }
@@ -130,6 +133,7 @@ model Company {
   businessHours  BusinessHour[]
   numberSequences NumberSequence[]
   files          File[]
+  employees      Employee[]
 
   @@unique([id, organizationId], map: "companies_id_organization_id_key")
   @@index([organizationId, status], map: "companies_organization_status_idx")
@@ -154,6 +158,7 @@ model Branch {
   businessHours  BusinessHour[]
   numberSequences NumberSequence[]
   files          File[]
+  employeeBranchAssignments EmployeeBranchAssignment[]
 
   @@unique([id, companyId, organizationId], map: "branches_id_company_organization_key")
   @@unique([companyId, code], map: "branches_company_code_key")
@@ -178,6 +183,7 @@ model User {
   businessHoursUpdated BusinessHour[] @relation("BusinessHourUpdatedBy")
   numberSequencesUpdated NumberSequence[] @relation("NumberSequenceUpdatedBy")
   uploadedFiles File[] @relation("FileUploader")
+  employeeDocumentsUploaded EmployeeDocument[]
 
   @@map("users")
 }
@@ -194,6 +200,7 @@ model OrganizationMembership {
   roleAssignments RoleAssignment[]
   selectedSessions Session[]       @relation("SessionSelectedMembership")
   accountTokens   AccountToken[]   @relation("AccountTokenMembership")
+  employees       Employee[]
 
   @@unique([organizationId, userId], map: "memberships_organization_user_key")
   @@unique([id, organizationId], map: "memberships_id_organization_id_key")
@@ -429,6 +436,8 @@ model CatalogItem {
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   catalog     Catalog      @relation(fields: [catalogId], references: [id], onDelete: Restrict)
+  employeePositions Employee[] @relation("EmployeePosition")
+  employeeDocumentTypes EmployeeDocument[] @relation("EmployeeDocumentType")
 
   @@unique([catalogId, code], map: "catalog_items_catalog_code_key")
   @@index([catalogId, status, name], map: "catalog_items_catalog_status_name_idx")
@@ -528,7 +537,10 @@ model File {
   branch            Branch?          @relation(fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
   uploader          User             @relation("FileUploader", fields: [uploadedBy], references: [id], onDelete: Restrict)
   link              FileLink?
+  employeePhoto     Employee?        @relation("EmployeePhoto")
+  employeeDocument  EmployeeDocument?
 
+  @@unique([id, organizationId, companyId], map: "files_id_organization_company_key")
   @@index([organizationId, companyId, branchId, status, createdAt], map: "files_scope_status_created_idx")
   @@index([status, deleteRequestedAt], map: "files_cleanup_idx")
   @@map("files")
@@ -544,4 +556,73 @@ model FileLink {
 
   @@index([resourceType, resourceId, createdAt], map: "file_links_resource_created_idx")
   @@map("file_links")
+}
+
+model Employee {
+  id                      String           @id @default(uuid()) @db.Uuid
+  organizationId          String           @map("organization_id") @db.Uuid
+  companyId               String           @map("company_id") @db.Uuid
+  internalCode            String           @map("internal_code") @db.VarChar(60)
+  firstNames              String           @map("first_names") @db.VarChar(120)
+  lastNames               String           @map("last_names") @db.VarChar(120)
+  personalDocumentNumber  String?          @map("personal_document_number") @db.VarChar(80)
+  personalPhone           String?          @map("personal_phone") @db.VarChar(40)
+  personalEmail           String?          @map("personal_email") @db.VarChar(320)
+  personalAddress         String?          @map("personal_address") @db.VarChar(500)
+  positionId              String?          @map("position_id") @db.Uuid
+  hireDate                DateTime         @map("hire_date") @db.Date
+  status                  RecordStatus     @default(ACTIVE)
+  userId                  String?          @map("user_id") @db.Uuid
+  photoFileId             String?          @unique(map: "employees_photo_file_id_key") @map("photo_file_id") @db.Uuid
+  createdAt               DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization            Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company                 Company          @relation(fields: [companyId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  membership              OrganizationMembership? @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Restrict)
+  position                CatalogItem?     @relation("EmployeePosition", fields: [positionId], references: [id], onDelete: Restrict)
+  photo                   File?            @relation("EmployeePhoto", fields: [photoFileId, organizationId, companyId], references: [id, organizationId, companyId], onDelete: Restrict)
+  branchAssignments       EmployeeBranchAssignment[]
+  documents               EmployeeDocument[]
+
+  @@unique([organizationId, companyId, internalCode], map: "employees_company_internal_code_key")
+  @@unique([organizationId, userId], map: "employees_organization_user_key")
+  @@unique([id, organizationId, companyId], map: "employees_id_organization_company_key")
+  @@unique([photoFileId, organizationId, companyId], map: "employees_photo_file_scope_key")
+  @@index([organizationId, companyId, status, lastNames, firstNames], map: "employees_scope_status_name_idx")
+  @@map("employees")
+}
+
+model EmployeeBranchAssignment {
+  employeeId     String       @map("employee_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  companyId      String       @map("company_id") @db.Uuid
+  branchId       String       @map("branch_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  employee       Employee     @relation(fields: [employeeId, organizationId, companyId], references: [id, organizationId, companyId], onDelete: Restrict)
+  branch         Branch       @relation(fields: [branchId, companyId, organizationId], references: [id, companyId, organizationId], onDelete: Restrict)
+
+  @@id([employeeId, branchId])
+  @@index([organizationId, companyId, branchId, employeeId], map: "employee_branch_assignments_scope_idx")
+  @@map("employee_branch_assignments")
+}
+
+model EmployeeDocument {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  companyId      String     @map("company_id") @db.Uuid
+  employeeId     String     @map("employee_id") @db.Uuid
+  fileId         String     @unique(map: "employee_documents_file_id_key") @map("file_id") @db.Uuid
+  typeId         String     @map("type_id") @db.Uuid
+  issuedAt       DateTime?  @map("issued_at") @db.Date
+  expiresAt      DateTime?  @map("expires_at") @db.Date
+  uploadedBy     String     @map("uploaded_by") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  employee       Employee   @relation(fields: [employeeId, organizationId, companyId], references: [id, organizationId, companyId], onDelete: Restrict)
+  file           File       @relation(fields: [fileId, organizationId, companyId], references: [id, organizationId, companyId], onDelete: Restrict)
+  type           CatalogItem @relation("EmployeeDocumentType", fields: [typeId], references: [id], onDelete: Restrict)
+  uploader       User       @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+
+  @@unique([fileId, organizationId, companyId], map: "employee_documents_file_scope_key")
+  @@index([employeeId, createdAt], map: "employee_documents_employee_created_idx")
+  @@map("employee_documents")
 }
