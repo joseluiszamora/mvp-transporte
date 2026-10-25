@@ -18,6 +18,7 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - Implementado en código: endpoints GET de lista y detalle, filtrado por tenant y `audit.read`, paginación, sanitización de diferencias y panel web ADM-07. Sin migración de datos.
 - Pruebas de integración implementadas para dos tenants y alcances de sucursal, usuario sin permiso, filtros, detalle, sanitización histórica y lectura/escritura sin edición. La ejecución local pasó con PostgreSQL y Mailpit desechables tras activar Docker Desktop.
 - Decisiones del propietario (19/10/2026): conservar todos los eventos de auditoría sin purga automática; para el permiso limitado a sucursal, incluir eventos de empleados asignados actualmente a esa sucursal. La visibilidad histórica sigue la asignación vigente.
+- Los eventos de archivos personales guardan el ID del empleado en el diff saneado para mantener ese alcance después de quitar el vínculo del archivo.
 - La Issue #11 permanece abierta. No declarar la tarea aceptada hasta completar decisiones, validación técnica y aceptación funcional.
 ### Validación local (19/10/2026)
 - `npm run lint`: pasó sin advertencias.
@@ -25,4 +26,4 @@ Código/migraciones/contratos, pruebas significativas, documentación actualizad
 - `npm run test`: pasó, 9/9.
 - `npm run build`: pasó; Vite informó un bundle web de 723.45 kB, sobre el umbral de 500 kB.
 - `npm run test:integration`: pasó con PostgreSQL/Mailpit desechables; aplicó las siete migraciones a la base efímera y completó la API. No se usó la base persistente local.
-- Pendientes: CI de PR #26 después de que la dependencia TASK-010 llegue a main (el workflow solo se dispara hacia main y PR #26 está apilada sobre task/010-personal), prueba manual de UI y aceptación funcional del propietario. La decisión de no purgar y usar la asignación actual ya está aprobada.
+- Pendiente: CI del head actualizado de PR #26, ahora dirigida a `main`. El head añade cobertura de eventos de archivos de empleado para confirmar visibilidad tras desvincular el archivo y denegación para empleados fuera de la sucursal. Prueba manual de UI y aceptación funcional pendientes. Las decisiones de no purgar y seguir la asignación actual están aprobadas.
