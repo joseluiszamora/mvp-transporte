@@ -1,8 +1,6 @@
 # TASK-001 — Integrar mvp-base con mvp-transporte
 
-**Estado:** Pendiente  
-**Prioridad:** P0  
-**Milestone:** M0 - Base del producto
+**Estado:** En curso · **Prioridad:** P0 · **Milestone:** M0 - Base del producto
 
 ## Objetivo
 
@@ -36,3 +34,15 @@ Inspeccionar ambos repositorios y establecer una integración reproducible que p
 - La estructura no contiene copias duplicadas de módulos base.
 - Se identifican comandos reales de instalación, ejecución y validación.
 - La API y web de mvp-transporte tienen límites documentados.
+
+## Avance — 2026-11-04
+
+- Se agregó mvp-base como submódulo en `mvp-base/`, fijado a `52f2e449dcf3a8109481fed55117327f1bd59b38`.
+- Se confirmó que mvp-base es un monorepo npm privado y que `@mvp-base/contracts` es un paquete privado de su workspace, no una distribución versionada independiente.
+- La decisión y el procedimiento para inicializar o actualizar el submódulo están registrados en `docs/decisions.md`.
+
+## Pendiente
+
+- Definir la integración de ejecución entre la API/web de transporte y los servicios públicos de mvp-base.
+- Acordar la estrategia compartida de Prisma y el procedimiento de migraciones para ambas aplicaciones.
+- Crear la guía raíz de instalación y validación combinada; este repositorio todavía no tiene `README.md` ni `package.json`.
