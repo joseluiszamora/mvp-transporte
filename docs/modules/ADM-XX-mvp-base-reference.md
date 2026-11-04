@@ -4,26 +4,36 @@
 
 Identificar las dependencias de plataforma usadas por mvp-transporte. Este archivo no replica reglas de negocio ni especificaciones internas de mvp-base. La documentación vigente de cada ADM se mantiene en el repositorio mvp-base.
 
-## Dependencias
+## Módulos confirmados para mvp-transporte
 
 | Módulo base | Uso desde mvp-transporte |
 |---|---|
-| ADM-01 Empresas y sucursales | Contexto empresarial y posible asignación organizativa de recursos |
 | ADM-02 Usuarios | Identidad de operadores y autores de acciones |
 | ADM-03 Autenticación | Sesiones y credenciales de acceso |
 | ADM-04 Roles y permisos | Autorización por empresa |
 | ADM-05 Personal | Fuente de identidad de conductores y ayudantes |
-| ADM-06 Configuración | Preferencias compartidas y parámetros de instalación |
-| ADM-07 Auditoría | Registro de cambios relevantes |
-| ADM-08 Archivos | Documentos, comprobantes y evidencias |
-| ADM-09 Notificaciones | Integración futura para alertas documentales |
-| ADM-10 Catálogos | Valores compartidos cuando correspondan |
+
+Esta es la selección confirmada para la integración inicial. No se duplicarán usuarios ni empleados en mvp-transporte.
+
+## Otras dependencias mencionadas por el producto
+
+Estas dependencias aparecen en la arquitectura o las fichas de transporte, pero no forman parte de la selección confirmada anterior. TASK-001 debe verificar sus contratos y determinar cuándo se integran:
+
+| Módulo base | Necesidad documentada | Estado |
+|---|---|---|
+| ADM-01 Empresas y sucursales | Contexto empresarial y asignación organizativa de recursos | Confirmar si el contexto requerido llega mediante ADM-04 o requiere integración directa |
+| ADM-06 Configuración | Preferencias compartidas y parámetros de instalación | Pendiente de confirmar necesidad |
+| ADM-07 Auditoría | Registro de cambios relevantes | Pendiente de confirmar contrato para acciones sensibles |
+| ADM-08 Archivos | Documentos, comprobantes y evidencias | Requerido por TRN-04 y TRN-06; confirmar contrato y fase de integración |
+| ADM-09 Notificaciones | Alertas documentales | Diferido según ADR-007 |
+| ADM-10 Catálogos | Valores compartidos cuando correspondan | Pendiente de confirmar según los campos finales |
 
 ## Contratos que deben verificarse al integrar
 
 - Cómo se obtiene la empresa activa y la membresía del usuario.
 - Cómo se consultan empleados y se vinculan a perfiles de transporte.
 - Cómo se exige un permiso para una operación por empresa.
+- Si el contexto de empresa se obtiene a través de ADM-04 o requiere consumo directo de ADM-01.
 - Cómo se suben, consultan y protegen archivos.
 - Cómo se registran eventos de auditoría.
 - Quién administra el esquema Prisma y cómo se despliegan migraciones.

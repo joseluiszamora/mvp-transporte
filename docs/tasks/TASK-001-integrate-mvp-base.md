@@ -39,6 +39,7 @@ Inspeccionar ambos repositorios y establecer una integración reproducible que p
 
 - Se agregó mvp-base como submódulo en `mvp-base/`, fijado a `52f2e449dcf3a8109481fed55117327f1bd59b38`.
 - Se confirmó que mvp-base es un monorepo npm privado y que `@mvp-base/contracts` es un paquete privado de su workspace, no una distribución versionada independiente.
+- Se confirmó la selección inicial de ADM-02 Usuarios, ADM-03 Autenticación, ADM-04 Roles y permisos y ADM-05 Personal; los contratos concretos y las dependencias adicionales siguen pendientes de verificación.
 - La decisión y el procedimiento para inicializar o actualizar el submódulo están registrados en `docs/decisions.md`.
 
 ## Pendiente

@@ -4,8 +4,7 @@ Registrar aquí decisiones aprobadas. Cada entrada debe incluir estado, fecha, d
 
 ## ADR-001 — Repositorios separados
 
-**Estado:** Aprobada  
-**Fecha:** 2026-11-04
+**Estado:** Aprobada · **Fecha:** 2026-11-04
 
 mvp-base y mvp-transporte son repositorios independientes. mvp-base es la fuente oficial de módulos comunes; mvp-transporte contiene los dominios de transporte. Esto permite mantener el sistema base reutilizable y el producto con ciclos de desarrollo separados.
 
@@ -72,3 +71,9 @@ Un vehículo puede tener tanque de gasolina y de GNV. Cada carga pertenece a un 
 **Fecha:** 2026-11-04
 
 Propietarios, flota, rutas reutilizables, horarios fijos, GPS y arqueo quedan fuera del alcance inicial porque aún no son necesarios o sus reglas no están definidas.
+
+## ADR-010 — Módulos de mvp-base para la integración inicial
+
+**Estado:** Aprobada · **Fecha:** 2026-11-04
+
+La integración inicial de mvp-transporte utilizará ADM-02 Usuarios para la identidad de operadores y autores de acciones; ADM-03 Autenticación para sesiones y credenciales; ADM-04 Roles y permisos para autorización por empresa; y ADM-05 Personal como fuente de identidad de conductores y ayudantes. Los demás módulos ADM mencionados por la documentación de transporte quedan por verificar y priorizar según sus contratos y las fases correspondientes; esta selección no autoriza duplicarlos.
