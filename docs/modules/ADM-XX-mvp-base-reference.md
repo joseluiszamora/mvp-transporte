@@ -13,20 +13,13 @@ Identificar las dependencias de plataforma usadas por mvp-transporte. Este archi
 | ADM-03 Autenticación | Sesiones y credenciales de acceso |
 | ADM-04 Roles y permisos | Autorización por empresa |
 | ADM-05 Personal | Fuente de identidad de conductores y ayudantes |
+| ADM-06 Configuración | Preferencias compartidas y parámetros de instalación |
 | ADM-07 Auditoría | Registro de cambios relevantes |
 | ADM-08 Archivos | Documentos, comprobantes y evidencias |
+| ADM-09 Notificaciones | Integración para notificaciones; la automatización de avisos documentales se difiere según ADR-007 |
+| ADM-10 Catálogos | Valores compartidos cuando correspondan |
 
-Esta es la selección confirmada para la integración inicial. mvp-transporte conservará mvp-base como fuente de verdad y no duplicará sus tablas, permisos ni reglas.
-
-## Otras dependencias mencionadas por el producto
-
-Estas dependencias aparecen en la arquitectura o las fichas de transporte, pero no forman parte de la selección confirmada anterior. TASK-001 debe verificar sus contratos y determinar cuándo se integran:
-
-| Módulo base | Necesidad documentada | Estado |
-|---|---|---|
-| ADM-06 Configuración | Preferencias compartidas y parámetros de instalación | Pendiente de confirmar necesidad |
-| ADM-09 Notificaciones | Alertas documentales | Diferido según ADR-007 |
-| ADM-10 Catálogos | Valores compartidos cuando correspondan | Pendiente de confirmar según los campos finales |
+Los diez módulos ADM quedan seleccionados como dependencias de mvp-transporte. La selección no significa que toda su funcionalidad se entregue en la primera fase; por ejemplo, la automatización de avisos documentales se mantiene diferida según ADR-007. mvp-transporte conservará mvp-base como fuente de verdad y no duplicará sus tablas, permisos ni reglas.
 
 ## Contratos que deben verificarse al integrar
 
@@ -36,6 +29,8 @@ Estas dependencias aparecen en la arquitectura o las fichas de transporte, pero 
 - Si el contexto de empresa se obtiene a través de ADM-04 o requiere consumo directo de ADM-01.
 - Cómo se suben, consultan y protegen archivos.
 - Cómo se registran eventos de auditoría.
+- Cómo se consultan preferencias compartidas y catálogos aplicables a transporte.
+- Qué eventos o plantillas utilizará la integración futura de notificaciones.
 - Quién administra el esquema Prisma y cómo se despliegan migraciones.
 
 No inventar endpoints, nombres de permisos, campos o comandos. Leerlos desde mvp-base durante la tarea TASK-001.
