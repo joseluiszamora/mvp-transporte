@@ -16,6 +16,14 @@ mvp-base y mvp-transporte son repositorios independientes. mvp-base es la fuente
 
 Consumir paquetes versionados si mvp-base ya ofrece módulos importables. Mientras no existan esos paquetes, se puede fijar mvp-base como submódulo a un commit/tag. No copiar fuentes ni mantener dos implementaciones. Antes de implementar, inspeccionar ambos repositorios y documentar el mecanismo efectivo.
 
+### Resolución inicial de integración — 2026-11-04
+
+- Se agrega `mvp-base` como submódulo Git en `mvp-base/`, remoto `git@github.com:joseluiszamora/mvp-base.git`, fijado al commit `52f2e449dcf3a8109481fed55117327f1bd59b38` de `main`.
+- Se elige el submódulo porque el repositorio base y `@mvp-base/contracts` son privados; los contratos forman parte del workspace npm interno y no se encontró una distribución versionada separada para consumir desde este repositorio.
+- Para clonar mvp-transporte con la referencia inicializada, ejecutar `git submodule update --init --recursive`.
+- Para actualizar la referencia, revisar primero el nuevo commit de `main` en mvp-base; luego ejecutar `git -C mvp-base fetch origin main`, `git -C mvp-base checkout <commit-revisado>` y `git add mvp-base` desde la raíz de mvp-transporte. El cambio queda registrado como una nueva referencia del submódulo en el commit de mvp-transporte.
+- Esta decisión fija el código fuente, pero no conecta todavía la API, los contratos de ejecución ni las migraciones de base de datos. Esos contratos deben verificarse antes de implementar módulos de transporte.
+
 ## ADR-003 — Arquitectura modular
 
 **Estado:** Aprobada  

@@ -51,7 +51,7 @@ Los componentes de plataforma se integran como paquetes versionados si existen. 
 - apps/api: composición Express, middleware compartido e integración de módulos de transporte.
 - apps/web: navegación y pantallas web de transporte.
 - packages/shared-contracts: contratos propios de mvp-transporte realmente compartidos entre API y web.
-- mvp-base/: submódulo opcional; solo se usa si el repositorio aún no distribuye paquetes.
+- mvp-base/: submódulo Git en la revisión registrada en ADR-002; permanece como workspace independiente y no se incorpora al workspace npm de mvp-transporte.
 - docs/: especificación funcional, decisiones, modelo de datos y tareas.
 
 El submódulo no debe asumirse automáticamente como workspace npm. Primero se inspeccionan las dependencias, exports, scripts y estrategia Prisma de mvp-base.
