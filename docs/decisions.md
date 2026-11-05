@@ -77,3 +77,13 @@ Propietarios, flota, rutas reutilizables, horarios fijos, GPS y arqueo quedan fu
 **Estado:** Aprobada · **Fecha:** 2026-11-04
 
 La integración de mvp-transporte utilizará ADM-01 Empresas y sucursales para el contexto organizativo; ADM-02 Usuarios para la identidad de operadores y autores de acciones; ADM-03 Autenticación para sesiones y credenciales; ADM-04 Roles y permisos para autorización por empresa; ADM-05 Personal como fuente de identidad de conductores y ayudantes; ADM-06 Configuración para preferencias y parámetros; ADM-07 Auditoría para registrar cambios relevantes; ADM-08 Archivos para documentos, comprobantes y evidencias; ADM-09 Notificaciones para la integración de avisos; y ADM-10 Catálogos para valores compartidos. La automatización de avisos documentales permanece diferida según ADR-007. mvp-base continúa como fuente de verdad y mvp-transporte no duplica sus módulos.
+
+## ADR-011 — Límite de ejecución y datos con mvp-base
+
+**Estado:** Aprobada · **Fecha:** 2026-11-05
+
+mvp-transporte y mvp-base se ejecutan como aplicaciones independientes y se integran mediante APIs HTTP públicas. Cada producto conserva su propia base PostgreSQL y su historial de migraciones: mvp-base administra el esquema de plataforma; mvp-transporte administra sus modelos de transporte y guarda IDs externos para organización, empresa, sucursal, empleado y archivo. No se importan internals del submódulo ni se consulta directamente su base.
+
+La decisión mantiene repositorios, despliegues y migraciones independientes, como permite la estructura real de mvp-base, y evita una historia Prisma duplicada o una segunda implementación de las reglas de plataforma. Un endpoint de Transporte solo puede autorizarse cuando mvp-base valide la sesión del actor y su permiso en el alcance objetivo. Los IDs del cliente no son evidencia de autorización.
+
+La revisión fijada aún no ofrece el contexto de permisos con alcance para códigos `transport.*`, un contrato de escritura de auditoría ni tipos de archivo para vehículos. TASK-007 registra esa extensión como dependencia externa. No se habilitarán escrituras de Transporte hasta que se integre.

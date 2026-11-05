@@ -26,6 +26,7 @@ Inspeccionar ambos repositorios y establecer una integración reproducible que p
 - Reorganizar el sistema base.
 - Publicar paquetes, cambiar permisos o desplegar.
 - Implementar reglas de negocio de transporte.
+- Modificar mvp-base desde este repositorio sin una tarea explícita en su repositorio.
 
 ## Criterios de aceptación
 
@@ -42,8 +43,16 @@ Inspeccionar ambos repositorios y establecer una integración reproducible que p
 - Se confirmó la selección de los diez módulos ADM de mvp-base; la automatización de avisos de ADM-09 permanece diferida según ADR-007. Los contratos concretos siguen pendientes de verificación.
 - La decisión y el procedimiento para inicializar o actualizar el submódulo están registrados en `docs/decisions.md`.
 
+## Avance — 2026-11-05
+
+- Se revisaron los exports, scripts, rutas HTTP, contratos TypeScript, permisos, archivos, auditoría, esquema Prisma y migraciones de la revisión fijada de mvp-base.
+- ADR-011 establece APIs HTTP entre aplicaciones independientes y bases separadas. Transporte conserva referencias externas y su propio historial Prisma; no importa código ni consulta las tablas de mvp-base.
+- Se agregó README y scripts de raíz. En esta fase delegan en los scripts existentes de mvp-base para preparar, arrancar y validar lo actualmente ejecutable.
+- Se documentaron las interfaces existentes y sus límites en `docs/integration/mvp-base.md` y `docs/modules/ADM-XX-mvp-base-reference.md`.
+- La revisión encontró un requisito de integración faltante: autorización de códigos `transport.*` con alcance, asociación de archivos a vehículos e ingreso de auditoría. TASK-007 especifica la extensión que debe integrarse desde mvp-base.
+
 ## Pendiente
 
-- Definir la integración de ejecución entre la API/web de transporte y los servicios públicos de mvp-base.
-- Acordar la estrategia compartida de Prisma y el procedimiento de migraciones para ambas aplicaciones.
-- Crear la guía raíz de instalación y validación combinada; este repositorio todavía no tiene `README.md` ni `package.json`.
+- Integrar TASK-007 y fijar en el submódulo la revisión que incluya los contratos públicos requeridos.
+- Crear la API/web de Transporte y extender los scripts de raíz para que cubran su código, sin dejar de ejecutar los checks de mvp-base.
+- Ejecutar instalación limpia y validaciones de los dos proyectos una vez disponible la implementación; no se han ejecutado en esta revisión.

@@ -1,0 +1,25 @@
+{
+  "name": "mvp-transporte",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "setup:base": "npm ci --prefix mvp-base",
+    "dev:base-api": "npm --prefix mvp-base run dev:api",
+    "dev:base-web": "npm --prefix mvp-base run dev:web",
+    "dev:base-email-worker": "npm --prefix mvp-base run dev:email-worker",
+    "bootstrap:platform-admin": "npm --prefix mvp-base run bootstrap:platform-admin",
+    "db:generate": "npm --prefix mvp-base run db:generate",
+    "db:migrate:dev": "npm --prefix mvp-base run db:migrate:dev",
+    "db:migrate:deploy": "npm --prefix mvp-base run db:migrate:deploy",
+    "db:seed": "npm --prefix mvp-base run db:seed",
+    "lint": "npm --prefix mvp-base run lint",
+    "typecheck": "npm --prefix mvp-base run typecheck",
+    "test": "npm --prefix mvp-base run test",
+    "build": "npm --prefix mvp-base run build",
+    "test:integration": "npm --prefix mvp-base run test:integration"
+  }
+}

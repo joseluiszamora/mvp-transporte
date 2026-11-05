@@ -2,35 +2,50 @@
 
 ## Propósito
 
-Identificar las dependencias de plataforma usadas por mvp-transporte. Este archivo no replica reglas de negocio ni especificaciones internas de mvp-base. La documentación vigente de cada ADM se mantiene en el repositorio mvp-base.
+Identificar las dependencias de plataforma usadas por mvp-transporte. Esta ficha resume las interfaces verificadas; la documentación funcional vigente de cada ADM se mantiene en el repositorio mvp-base.
 
-## Módulos confirmados para mvp-transporte
+La revisión analizada es el commit `52f2e449dcf3a8109481fed55117327f1bd59b38`. La integración de ejecución se documenta en [docs/integration/mvp-base.md](../integration/mvp-base.md).
+
+## Módulos seleccionados
 
 | Módulo base | Uso desde mvp-transporte |
 |---|---|
-| ADM-01 Empresas y sucursales | Contexto empresarial y asignación organizativa de recursos |
+| ADM-01 Empresas y sucursales | Referencias organizativas y validación del alcance empresarial |
 | ADM-02 Usuarios | Identidad de operadores y autores de acciones |
 | ADM-03 Autenticación | Sesiones y credenciales de acceso |
-| ADM-04 Roles y permisos | Autorización por empresa |
+| ADM-04 Roles y permisos | Autorización por organización, empresa y sucursal |
 | ADM-05 Personal | Fuente de identidad de conductores y ayudantes |
 | ADM-06 Configuración | Preferencias compartidas y parámetros de instalación |
 | ADM-07 Auditoría | Registro de cambios relevantes |
 | ADM-08 Archivos | Documentos, comprobantes y evidencias |
-| ADM-09 Notificaciones | Integración para notificaciones; la automatización de avisos documentales se difiere según ADR-007 |
+| ADM-09 Notificaciones | Integración futura; avisos documentales automáticos diferidos según ADR-007 |
 | ADM-10 Catálogos | Valores compartidos cuando correspondan |
 
-Los diez módulos ADM quedan seleccionados como dependencias de mvp-transporte. La selección no significa que toda su funcionalidad se entregue en la primera fase; por ejemplo, la automatización de avisos documentales se mantiene diferida según ADR-007. mvp-transporte conservará mvp-base como fuente de verdad y no duplicará sus tablas, permisos ni reglas.
+La selección no duplica tablas, permisos ni reglas de mvp-base y no compromete toda su funcionalidad en la primera fase.
 
-## Contratos que deben verificarse al integrar
+## Interfaces verificadas
 
-- Cómo se obtiene la empresa activa y la membresía del usuario.
-- Cómo se consultan empleados y se vinculan a perfiles de transporte.
-- Cómo se exige un permiso para una operación por empresa.
-- Si el contexto de empresa se obtiene a través de ADM-04 o requiere consumo directo de ADM-01.
-- Cómo se suben, consultan y protegen archivos.
-- Cómo se registran eventos de auditoría.
-- Cómo se consultan preferencias compartidas y catálogos aplicables a transporte.
-- Qué eventos o plantillas utilizará la integración futura de notificaciones.
-- Quién administra el esquema Prisma y cómo se despliegan migraciones.
+| Capacidad | Interfaz disponible | Estado para Transporte |
+|---|---|---|
+| Autenticación | `POST /api/v1/auth/login`, `/refresh`, `/select-organization`; `GET /api/v1/auth/me` | Reutilizable para sesión. `/auth/me` devuelve organización seleccionada y códigos de permiso planos, no alcances por empresa/sucursal. |
+| Empresas y sucursales | APIs `/api/v1/organizations/companies` y `/branches` | Reutilizables según permisos del actor. La sesión selecciona organización, no empresa activa. |
+| Personal | `GET /api/v1/employees`, `GET /api/v1/employees/{employeeId}`, APIs de documentos y foto | Fuente de identidad reutilizable; perfiles de transporte se guardan en Transporte y referencian IDs externos. |
+| Archivos | `/api/v1/files`, `/api/v1/files/{fileId}`, `/content` | Protege archivos privados de tipos existentes. No contempla vehículo ni comprobante de combustible como tipo de recurso. |
+| Auditoría | `GET /api/v1/audit`, `GET /api/v1/audit/{eventId}` | Consulta disponible. La escritura está encapsulada en los servicios internos; no hay API pública de ingreso para eventos de Transporte. |
+| Catálogos | `/api/v1/catalogs` | Reutilizar catálogos existentes cuando correspondan. |
+| Configuración | `/api/v1/settings` | Reutilizar valores compartidos; evitar duplicar configuración de plataforma. |
+| Notificaciones | `/api/v1/notifications` | Mantener fuera de la primera integración de vencimientos según ADR-007. |
+| Contratos TypeScript | Workspace privado `@mvp-base/contracts` | Incluye tipos de API; no ofrece cliente, middleware o SDK importable por este repositorio. |
 
-No inventar endpoints, nombres de permisos, campos o comandos. Leerlos desde mvp-base durante la tarea TASK-001.
+La especificación OpenAPI está disponible en `/api/v1/openapi.json`. Las rutas actuales están montadas por la aplicación de mvp-base. No se debe importar `mvp-base/apps/api/src/**` para suplir contratos públicos que faltan.
+
+## Contratos pendientes
+
+TASK-007 especifica la extensión que debe implementarse y publicarse desde mvp-base antes de abrir escrituras de Transporte:
+
+- Validación de sesión y permiso con alcance para códigos `transport.*` y el recurso objetivo.
+- Extensión controlada del catálogo común de permisos para los códigos del producto.
+- Archivos asociados a vehículos y otros recursos externos, con comprobación de alcance y protección de descarga.
+- Ingreso autenticado de eventos de auditoría con actor validado por mvp-base.
+
+No inventar endpoints ni nombres de permiso. Esta ficha se actualiza con el contrato real al integrar el cambio del repositorio base.

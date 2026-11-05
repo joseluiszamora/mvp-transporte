@@ -11,6 +11,7 @@ Implementar el registro de vehículos y perfiles de conductor/ayudante ligados a
 ## Prerrequisitos
 
 - TASK-001 completada.
+- TASK-007 integrada en mvp-base, con autorización contextual, auditoría y permisos de transporte disponibles mediante contrato público.
 - Contratos de Company, Employee, permisos y auditoría identificados.
 
 ## Alcance

@@ -17,17 +17,19 @@ No volver a crear estas entidades en mvp-transporte:
 
 La relación exacta debe seguir el esquema real de mvp-base.
 
+Estos modelos pertenecen a la base de datos de mvp-base. La base de Transporte no replica sus tablas ni mantiene claves foráneas entre bases. Los modelos de Transporte guardan IDs externos para `organizationId`, `companyId`, `branchId`, `employeeId` y `fileId`; cada relación se valida a través de los contratos autorizados de mvp-base. Hasta que estén disponibles la autorización contextual y los contratos de archivo/auditoría requeridos, no se implementan operaciones de escritura que dependan de ellos. Ver [contrato de integración](integration/mvp-base.md).
+
 ## Entidades de transporte
 
 | Entidad | Responsabilidad | Relaciones principales |
 |---|---|---|
-| Vehicle | Datos y disponibilidad del vehículo | Empresa, documentos, viajes, mantenimiento y tanques |
-| DriverProfile | Datos operativos del conductor | Employee |
-| AssistantProfile | Datos operativos del ayudante propio | Employee |
+| Vehicle | Datos y disponibilidad del vehículo | Referencias externas a empresa/sucursal; documentos, viajes, mantenimiento y tanques de Transporte |
+| DriverProfile | Datos operativos del conductor | Referencia externa a Employee |
+| AssistantProfile | Datos operativos del ayudante propio | Referencia externa a Employee |
 | TransportTrip | Operación de transporte en una fecha o periodo | Vehicle, tripulación y paradas |
 | TripCrewAssignment | Rol, origen e intervalo de participación de la tripulación | TransportTrip y opcionalmente Employee |
 | TripStop | Parada propia de un viaje corto | TransportTrip |
-| ResourceDocument | Tipo, archivo y vencimiento de documento | Vehicle o Employee, exactamente uno |
+| ResourceDocument | Tipo, archivo y vencimiento de documento | Vehicle o Employee, exactamente uno; el archivo es una referencia externa autorizada |
 | MaintenancePlan | Regla preventiva y próximo vencimiento | Vehicle |
 | MaintenanceRecord | Mantenimiento correctivo o servicio realizado | Vehicle y opcionalmente MaintenancePlan |
 | VehicleFuelTank | Tanque instalado y combustible/unidad admitidos | Vehicle |
@@ -37,9 +39,9 @@ La relación exacta debe seguir el esquema real de mvp-base.
 
 ```mermaid
 erDiagram
-    COMPANY ||--o{ VEHICLE : owns
-    EMPLOYEE ||--o| DRIVER_PROFILE : may_have
-    EMPLOYEE ||--o| ASSISTANT_PROFILE : may_have
+    COMPANY ||--o{ VEHICLE : external_reference
+    EMPLOYEE ||--o| DRIVER_PROFILE : external_reference
+    EMPLOYEE ||--o| ASSISTANT_PROFILE : external_reference
     VEHICLE ||--o{ TRANSPORT_TRIP : assigned_to
     TRANSPORT_TRIP ||--o{ TRIP_CREW_ASSIGNMENT : has
     EMPLOYEE o|--o{ TRIP_CREW_ASSIGNMENT : participates
@@ -60,9 +62,10 @@ El diagrama muestra relaciones conceptuales. ResourceDocument debe referenciar v
 
 ### Empresa
 
-- Cada recurso operativo pertenece a una empresa.
-- Las relaciones entre vehículo, empleado, viaje, documento, mantenimiento y tanque deben validar que todos pertenezcan al mismo ámbito empresarial.
-- Las consultas se filtran por empresa activa en el backend.
+- Cada recurso operativo almacena organización y empresa como referencias externas.
+- Las relaciones locales entre vehículo, viaje, documento, mantenimiento, tanque y carga se validan en la base de Transporte.
+- Las relaciones con empresa, sucursal, empleado y archivo se validan por los contratos de mvp-base; no hay claves foráneas entre bases.
+- Las consultas se filtran por empresa objetivo y organización validadas en backend. mvp-base actualmente selecciona organización, no empresa activa.
 - La placa es única por empresa, incluyendo recursos desactivados que mantengan historial.
 
 ### Personal y tripulación

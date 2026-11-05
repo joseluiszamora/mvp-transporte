@@ -10,7 +10,7 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
 | Fase | Entrega | Dependencias | Milestone GitHub | Estado |
 |---|---|---|---|---|
-| 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura | M0 - Base del producto | Pendiente |
+| 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura; TASK-007 | M0 - Base del producto | En curso |
 | 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | Pendiente |
 | 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | Pendiente |
 | 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | Pendiente |
@@ -23,6 +23,7 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 - Fijar integración con paquete versionado si existe; de lo contrario, evaluar submódulo con commit/tag exacto.
 - Crear API/web en monorepo, configuración local, documentación y controles de GitHub.
 - Salida: aplicación local arranca y no duplica módulos base.
+- Dependencia identificada: TASK-007 debe exponer autorización contextual, archivos para recursos de transporte y escritura de auditoría. La aplicación de transporte no debe habilitar escrituras antes de esa integración.
 
 ## Fase 1 — Recursos principales
 
