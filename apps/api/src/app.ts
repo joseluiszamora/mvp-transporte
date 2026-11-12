@@ -7,6 +7,7 @@ import { createErrorHandler, ApiError } from "./errors.ts";
 import type { BaseIntegrationClient } from "./modules/integrations/base-client.ts";
 import { createOperationalStaffRouter } from "./modules/operational-staff/staff-router.ts";
 import { createResourcesRouter } from "./modules/resources/resources-router.ts";
+import { createTripsRouter } from "./modules/trips/trips-router.ts";
 import { createVehiclesRouter } from "./modules/vehicles/vehicles-router.ts";
 
 export interface ApplicationConfig {
@@ -70,6 +71,7 @@ export function createApplication(database: PrismaClient, base: BaseIntegrationC
   });
   api.use("/vehicles", createVehiclesRouter(database, base));
   api.use("/operational-staff", createOperationalStaffRouter(database, base));
+  api.use("/trips", createTripsRouter(database, base));
   api.use("/", createResourcesRouter(database, base));
   app.use("/api/v1/transport", api);
   app.use("/api/v1/transport", (_request, response) => response.status(404).json({ error: { code: "NOT_FOUND", message: "Recurso no encontrado.", requestId: response.locals.requestId } }));
@@ -109,6 +111,10 @@ const openApiDocument = {
     "/operational-staff/assistant-profiles": { get: { summary: "Listar perfiles de ayudante", responses: { "200": { description: "Perfiles" } } }, post: { summary: "Crear perfil de ayudante", responses: { "201": { description: "Perfil creado" } } } },
     "/operational-staff/driver-profiles/{profileId}": { patch: { summary: "Cambiar estado del perfil de conductor", responses: { "200": { description: "Perfil actualizado" } } } },
     "/operational-staff/assistant-profiles/{profileId}": { patch: { summary: "Cambiar estado del perfil de ayudante", responses: { "200": { description: "Perfil actualizado" } } } },
+    "/trips": { get: { summary: "Listar viajes y asignaciones por empresa", responses: { "200": { description: "Página de viajes" } } }, post: { summary: "Planificar un viaje", responses: { "201": { description: "Viaje planificado" } } } },
+    "/trips/{tripId}": { get: { summary: "Consultar viaje e historial de cambios", responses: { "200": { description: "Viaje e historial" } } } },
+    "/trips/{tripId}/assignment": { put: { summary: "Asignar o cambiar vehículo y tripulación conservando historial", responses: { "200": { description: "Asignación actualizada" } } } },
+    "/trips/{tripId}/status": { patch: { summary: "Asignar, iniciar, completar o cancelar un viaje", responses: { "200": { description: "Estado actualizado" } } } },
     "/documents/{ownerType}/{ownerId}": { get: { summary: "Listar documentos privados de un vehículo o empleado", parameters: [{ name: "ownerType", in: "path", required: true, schema: { type: "string", enum: ["VEHICLE", "EMPLOYEE"] } }, { name: "ownerId", in: "path", required: true, schema: { type: "string", format: "uuid" } }, { name: "companyId", in: "query", required: true, schema: { type: "string", format: "uuid" } }], responses: { "200": { description: "Documentos y referencias privadas" } } } },
     "/documents/{ownerType}/{ownerId}/upload": {
       post: {

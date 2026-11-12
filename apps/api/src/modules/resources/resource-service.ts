@@ -34,6 +34,40 @@ function scopeWhere(target: AuthorizedTarget) {
   };
 }
 
+function dayStartUtc(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+export async function assertTripResourcesAvailable(
+  transaction: Prisma.TransactionClient,
+  target: AuthorizedTarget,
+  trip: { vehicleId: string; plannedStartAt: Date; plannedEndAt: Date },
+  employeeIds: string[],
+): Promise<void> {
+  const blockedByMaintenance = await transaction.maintenanceRecord.findFirst({ where: {
+    organizationId: target.organizationId,
+    companyId: target.companyId,
+    vehicleId: trip.vehicleId,
+    OR: [
+      { status: "IN_PROGRESS", outOfService: true },
+      { status: "SCHEDULED", scheduledAt: { gte: dayStartUtc(trip.plannedStartAt), lte: dayStartUtc(trip.plannedEndAt) } },
+    ],
+  }, select: { id: true } });
+  if (blockedByMaintenance) throw new ApiError(409, "TRIP_MAINTENANCE_CONFLICT", "El vehículo tiene mantenimiento activo o programado durante el viaje.");
+
+  const expiredDocument = await transaction.resourceDocument.findFirst({ where: {
+    organizationId: target.organizationId,
+    companyId: target.companyId,
+    status: "CURRENT",
+    expiresAt: { lt: dayStartUtc(trip.plannedEndAt) },
+    OR: [
+      { ownerType: "VEHICLE", vehicleId: trip.vehicleId },
+      ...(employeeIds.length > 0 ? [{ ownerType: "EMPLOYEE" as const, employeeId: { in: employeeIds } }] : []),
+    ],
+  }, select: { id: true } });
+  if (expiredDocument) throw new ApiError(409, "TRIP_DOCUMENT_EXPIRED", "Un documento vigente del vehículo o la tripulación vence antes de terminar el viaje.");
+}
+
 function mapDocument(row: DocumentWithRenewal, remoteFile?: Awaited<ReturnType<BaseIntegrationClient["listExternalFiles"]>>[number]): ResourceDocumentItem {
   return {
     id: row.id,

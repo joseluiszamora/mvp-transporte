@@ -59,6 +59,49 @@ enum FuelUnit {
   @@map("fuel_unit")
 }
 
+enum TripType {
+  DISTRIBUTION
+  SHORT_ROUTE
+  LONG_DISTANCE
+
+  @@map("trip_type")
+}
+
+enum TripStatus {
+  PLANNED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("trip_status")
+}
+
+enum TripCrewRole {
+  DRIVER
+  ASSISTANT
+
+  @@map("trip_crew_role")
+}
+
+enum TripCrewSource {
+  INTERNAL
+  CLIENT
+
+  @@map("trip_crew_source")
+}
+
+enum TripEventType {
+  CREATED
+  ASSIGNMENT_CHANGED
+  ASSIGNED
+  STARTED
+  COMPLETED
+  CANCELLED
+
+  @@map("trip_event_type")
+}
+
 model Vehicle {
   id              String       @id @default(uuid()) @db.Uuid
   organizationId  String       @map("organization_id") @db.Uuid
@@ -80,6 +123,7 @@ model Vehicle {
   maintenanceRecords MaintenanceRecord[]
   fuelTanks       VehicleFuelTank[]
   fuelRecords     FuelRecord[]
+  trips           Trip[]
 
   @@unique([companyId, plateNormalized], map: "vehicles_company_plate_normalized_key")
   @@index([organizationId, companyId, status], map: "vehicles_scope_status_idx")
@@ -238,4 +282,83 @@ model FuelRecord {
   @@index([organizationId, companyId, vehicleId, occurredAt], map: "fuel_records_scope_vehicle_date_idx")
   @@index([organizationId, companyId, fuelType, unit], map: "fuel_records_scope_fuel_unit_idx")
   @@map("fuel_records")
+}
+
+model Trip {
+  id                     String      @id @default(uuid()) @db.Uuid
+  organizationId         String      @map("organization_id") @db.Uuid
+  companyId              String      @map("company_id") @db.Uuid
+  branchId               String?     @map("branch_id") @db.Uuid
+  type                   TripType
+  status                 TripStatus  @default(PLANNED)
+  vehicleId              String      @map("vehicle_id") @db.Uuid
+  contractingCompanyId   String?     @map("contracting_company_id") @db.Uuid
+  origin                 String      @db.VarChar(160)
+  destination            String      @db.VarChar(160)
+  sealNumbers            String[]    @default([]) @map("seal_numbers")
+  plannedStartAt         DateTime    @map("planned_start_at") @db.Timestamptz(6)
+  plannedEndAt           DateTime    @map("planned_end_at") @db.Timestamptz(6)
+  actualStartAt          DateTime?   @map("actual_start_at") @db.Timestamptz(6)
+  actualEndAt            DateTime?   @map("actual_end_at") @db.Timestamptz(6)
+  cancelledAt            DateTime?   @map("cancelled_at") @db.Timestamptz(6)
+  cancelledByActorId     String?     @map("cancelled_by_actor_id") @db.Uuid
+  cancellationReason     String?     @map("cancellation_reason") @db.VarChar(300)
+  createdByActorId       String      @map("created_by_actor_id") @db.Uuid
+  createdAt              DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  vehicle                Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  stops                  TripStop[]
+  crew                   TripCrewAssignment[]
+  events                 TripEvent[]
+
+  @@index([organizationId, companyId, status, plannedStartAt], map: "trips_scope_status_start_idx")
+  @@index([vehicleId, status, plannedStartAt, plannedEndAt], map: "trips_vehicle_schedule_idx")
+  @@index([contractingCompanyId], map: "trips_contracting_company_idx")
+  @@map("trips")
+}
+
+model TripStop {
+  id        String   @id @default(uuid()) @db.Uuid
+  tripId    String   @map("trip_id") @db.Uuid
+  position  Int
+  location  String   @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Restrict)
+
+  @@unique([tripId, position], map: "trip_stops_trip_position_key")
+  @@map("trip_stops")
+}
+
+model TripCrewAssignment {
+  id                 String        @id @default(uuid()) @db.Uuid
+  tripId             String        @map("trip_id") @db.Uuid
+  role               TripCrewRole
+  source             TripCrewSource
+  employeeId         String?       @map("employee_id") @db.Uuid
+  externalName       String?       @map("external_name") @db.VarChar(120)
+  startsAt           DateTime      @map("starts_at") @db.Timestamptz(6)
+  endsAt             DateTime      @map("ends_at") @db.Timestamptz(6)
+  isActive           Boolean       @default(true) @map("is_active")
+  createdByActorId   String        @map("created_by_actor_id") @db.Uuid
+  cancelledAt        DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancelledByActorId String?       @map("cancelled_by_actor_id") @db.Uuid
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  trip               Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict)
+
+  @@index([tripId, isActive, startsAt], map: "trip_crew_trip_active_start_idx")
+  @@index([employeeId, isActive, startsAt, endsAt], map: "trip_crew_employee_schedule_idx")
+  @@map("trip_crew_assignments")
+}
+
+model TripEvent {
+  id        String        @id @default(uuid()) @db.Uuid
+  tripId    String        @map("trip_id") @db.Uuid
+  type      TripEventType
+  actorId   String        @map("actor_id") @db.Uuid
+  payload   Json?
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  trip      Trip          @relation(fields: [tripId], references: [id], onDelete: Restrict)
+
+  @@index([tripId, createdAt], map: "trip_events_trip_created_idx")
+  @@map("trip_events")
 }

@@ -13,7 +13,7 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 | 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura; TASK-007 | M0 - Base del producto | En revisión |
 | 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | En curso |
 | 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | En curso |
-| 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | Pendiente |
+| 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | En curso |
 | 4 | App móvil para conductor | API de viajes estable | M4 - Operación móvil | Pendiente |
 | 5 | Integración y versión inicial | Fases 1–4 y revisión de permisos | M5 - Versión inicial | Pendiente |
 

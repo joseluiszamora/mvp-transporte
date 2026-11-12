@@ -25,6 +25,10 @@ const permissionDefinitions = [
   { code: "transport.maintenance.manage", description: "Administrar mantenimiento de vehículos" },
   { code: "transport.fuel.read", description: "Consultar tanques y cargas de combustible" },
   { code: "transport.fuel.manage", description: "Administrar tanques y cargas de combustible" },
+  { code: "transport.trips.read", description: "Consultar viajes y asignaciones" },
+  { code: "transport.trips.create", description: "Planificar viajes" },
+  { code: "transport.trips.assign", description: "Asignar y cambiar recursos de un viaje" },
+  { code: "transport.trips.transition", description: "Cambiar el estado operativo de un viaje" },
   { code: "transport.audit.write", description: "Registrar cambios de transporte en auditoría" },
 ];
 const fileResources = [

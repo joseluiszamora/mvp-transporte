@@ -83,6 +83,39 @@ export async function assertVehicleAssignable(database: PrismaClient, id: string
   }
 }
 
+export async function getAssignableVehicle(
+  database: Pick<PrismaClient, "vehicle">,
+  target: AuthorizedTarget,
+  vehicleId: string,
+): Promise<Vehicle> {
+  const vehicle = await database.vehicle.findFirst({ where: {
+    id: vehicleId,
+    organizationId: target.organizationId,
+    companyId: target.companyId,
+    ...(target.branchId ? { OR: [{ branchId: null }, { branchId: target.branchId }] } : {}),
+  } });
+  if (!vehicle) throw new ApiError(404, "VEHICLE_NOT_FOUND", "El vehículo no está disponible para esta empresa.");
+  if (vehicle.status !== "ACTIVE") throw new ApiError(409, "VEHICLE_INACTIVE", "El vehículo está inactivo y no se puede asignar.");
+  return vehicle;
+}
+
+export async function getVehiclePlates(
+  database: Pick<PrismaClient, "vehicle">,
+  target: AuthorizedTarget,
+  vehicleIds: string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(vehicleIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await database.vehicle.findMany({ where: {
+    id: { in: ids },
+    organizationId: target.organizationId,
+    companyId: target.companyId,
+    ...(target.branchId ? { OR: [{ branchId: null }, { branchId: target.branchId }] } : {}),
+  }, select: { id: true, plate: true } });
+  if (rows.length !== ids.length) throw new ApiError(404, "VEHICLE_NOT_FOUND", "El vehículo no está disponible para esta empresa.");
+  return new Map(rows.map((row) => [row.id, row.plate]));
+}
+
 export async function createVehicle(
   database: PrismaClient,
   base: BaseIntegrationClient,

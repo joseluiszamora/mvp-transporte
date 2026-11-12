@@ -1,6 +1,6 @@
 # mvp-transporte
 
-Producto de transporte que usa mvp-base para identidad, empresas, permisos, personal, archivos, auditoría, configuración y catálogos. La primera entrega vertical implementa vehículos y perfiles de personal operativo en una API y una web propias.
+Producto de transporte que usa mvp-base para identidad, empresas, permisos, personal, archivos, auditoría, configuración y catálogos. La API y la web propias implementan vehículos, personal operativo, recursos y viajes.
 
 ## Estado actual
 
@@ -8,6 +8,8 @@ Producto de transporte que usa mvp-base para identidad, empresas, permisos, pers
 - mvp-base y Transporte se comunican por HTTP y conservan bases y migraciones separadas.
 - El contrato de autorización por alcance, auditoría y archivos externos quedó integrado en `main` de mvp-base en `97c5840`; el submódulo está fijado a esa revisión. CI runs 59 y 60 pasaron tras corregir el aislamiento de archivos. Transporte registra permisos al arrancar y valida cada operación con Base.
 - TASK-002 desarrolla vehículos con capacidad en kg y perfiles de conductor/ayudante ligados a Employee. La API no duplica identidad ni tablas de mvp-base.
+- TASK-003 implementa documentos, mantenimiento y combustible; la comprobación de archivos de extremo a extremo queda pendiente.
+- TASK-004 implementa planificación, tripulación, estados e historial de viajes; la fase sigue en curso.
 
 ## Requisitos
 

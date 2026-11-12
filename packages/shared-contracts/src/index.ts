@@ -5,6 +5,11 @@ export type MaintenanceType = "PREVENTIVE" | "CORRECTIVE";
 export type MaintenanceRecordStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type FuelType = "GASOLINE" | "GNV";
 export type FuelUnit = "LITER" | "CUBIC_METER" | "KILOGRAM";
+export type TripType = "DISTRIBUTION" | "SHORT_ROUTE" | "LONG_DISTANCE";
+export type TripStatus = "PLANNED" | "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type TripCrewRole = "DRIVER" | "ASSISTANT";
+export type TripCrewSource = "INTERNAL" | "CLIENT";
+export type TripEventType = "CREATED" | "ASSIGNMENT_CHANGED" | "ASSIGNED" | "STARTED" | "COMPLETED" | "CANCELLED";
 
 export interface PageResponse<T> {
   items: T[];
@@ -147,6 +152,86 @@ export interface FuelSummaryItem {
   costAmount: number;
   currencyCode: string;
   records: number;
+}
+
+export interface TripStopInput {
+  location: string;
+}
+
+export interface TripCrewAssignmentInput {
+  role: TripCrewRole;
+  source: TripCrewSource;
+  employeeId?: string;
+  externalName?: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface TripCreateInput {
+  companyId: string;
+  branchId?: string | null;
+  type: TripType;
+  vehicleId: string;
+  contractingCompanyId?: string | null;
+  origin: string;
+  destination: string;
+  sealNumbers?: string[];
+  plannedStartAt: string;
+  plannedEndAt: string;
+  stops?: TripStopInput[];
+  crew?: TripCrewAssignmentInput[];
+}
+
+export interface TripAssignmentInput {
+  vehicleId: string;
+  crew: TripCrewAssignmentInput[];
+}
+
+export interface TripStopItem extends TripStopInput {
+  id: string;
+  position: number;
+}
+
+export interface TripCrewAssignmentItem extends TripCrewAssignmentInput {
+  id: string;
+  isActive: boolean;
+  createdByActorId: string;
+  cancelledAt: string | null;
+  createdAt: string;
+}
+
+export interface TripEventItem {
+  id: string;
+  type: TripEventType;
+  actorId: string;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface TripItem {
+  id: string;
+  organizationId: string;
+  companyId: string;
+  branchId: string | null;
+  type: TripType;
+  status: TripStatus;
+  vehicleId: string;
+  vehiclePlate: string;
+  contractingCompanyId: string | null;
+  origin: string;
+  destination: string;
+  sealNumbers: string[];
+  plannedStartAt: string;
+  plannedEndAt: string;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  stops: TripStopItem[];
+  crew: TripCrewAssignmentItem[];
+  events: TripEventItem[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface IntegratedFileItem {

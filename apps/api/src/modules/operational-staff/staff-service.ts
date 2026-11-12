@@ -5,6 +5,24 @@ import type { AuthorizedTarget, BaseIntegrationClient, EmployeeDetails } from ".
 
 export type ProfileKind = "driver" | "assistant";
 
+export async function assertActiveOperationalEmployee(
+  database: Pick<PrismaClient, "driverProfile" | "assistantProfile">,
+  base: BaseIntegrationClient,
+  bearer: string,
+  target: AuthorizedTarget,
+  kind: ProfileKind,
+  employeeId: string,
+): Promise<EmployeeDetails> {
+  const profile = kind === "driver"
+    ? await database.driverProfile.findFirst({ where: { organizationId: target.organizationId, companyId: target.companyId, employeeId, status: "ACTIVE" }, select: { id: true } })
+    : await database.assistantProfile.findFirst({ where: { organizationId: target.organizationId, companyId: target.companyId, employeeId, status: "ACTIVE" }, select: { id: true } });
+  if (!profile) throw new ApiError(409, kind === "driver" ? "DRIVER_PROFILE_REQUIRED" : "ASSISTANT_PROFILE_REQUIRED", `El ${kind === "driver" ? "conductor" : "ayudante"} debe tener un perfil activo en Transporte.`);
+  const employee = await base.getEmployee(bearer, employeeId);
+  if (employee.status !== "ACTIVE") throw new ApiError(409, "EMPLOYEE_INACTIVE", "La tripulación debe pertenecer a personal activo.");
+  if (employee.companyId !== target.companyId) throw new ApiError(409, "EMPLOYEE_COMPANY_MISMATCH", "La tripulación debe pertenecer a la empresa del viaje.");
+  return employee;
+}
+
 function employeeLabel(employee: EmployeeDetails): string {
   return `${employee.firstNames} ${employee.lastNames}`.trim();
 }

@@ -11,11 +11,13 @@ import type { SelectChangeEvent } from "@mui/material";
 import GroupsRounded from "@mui/icons-material/GroupsRounded";
 import BuildRounded from "@mui/icons-material/BuildRounded";
 import LocalShippingRounded from "@mui/icons-material/LocalShippingRounded";
+import RouteRounded from "@mui/icons-material/RouteRounded";
 import LogoutRounded from "@mui/icons-material/LogoutRounded";
 import { useSession, type OrganizationOption } from "./session.tsx";
 import { VehiclesPage } from "./modules/vehicles/vehicles-page.tsx";
 import { StaffPage } from "./modules/operational-staff/staff-page.tsx";
 import { ResourcesPage } from "./modules/resources/resources-page.tsx";
+import { TripsPage } from "./modules/trips/trips-page.tsx";
 import type { BranchOption, CompanyOption } from "@mvp-transporte/shared-contracts";
 
 const companiesKey = ["companies"];
@@ -99,7 +101,7 @@ export function App() {
         <Box>
           <Typography variant="overline" color="primary.main" sx={{ fontWeight: 700, letterSpacing: ".14em" }}>GESTIÓN DE TRANSPORTE</Typography>
           <Typography variant="h4" sx={{ mt: 0.5 }}>Control operativo</Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>Administra flota, personal operativo, documentos, mantenimiento y combustible.</Typography>
+          <Typography color="text.secondary" sx={{ mt: 1 }}>Administra flota, personal operativo, recursos y viajes.</Typography>
         </Box>
         <Avatar sx={{ bgcolor: "#e3eee9", color: "primary.dark", width: 48, height: 48 }}>OP</Avatar>
       </Box>
@@ -108,6 +110,7 @@ export function App() {
           <NavigationLink to="/vehicles" label="Vehículos" icon={<LocalShippingRounded />} />
           <NavigationLink to="/staff" label="Personal operativo" icon={<GroupsRounded />} />
           <NavigationLink to="/resources" label="Recursos" icon={<BuildRounded />} />
+          <NavigationLink to="/trips" label="Viajes" icon={<RouteRounded />} />
         </Box>
         <Divider />
         {companies.isLoading && <LinearProgress />}
@@ -117,6 +120,7 @@ export function App() {
           <Route path="/vehicles" element={<VehiclesPage companyId={companyId} branchId={branchId} branches={activeBranches} branchesError={branches.error?.message} onBranchChange={setBranchId} onNotice={setNotice} />} />
           <Route path="/staff" element={<StaffPage companyId={companyId} onNotice={setNotice} />} />
           <Route path="/resources" element={<ResourcesPage companyId={companyId} branchId={branchId} branches={activeBranches} branchesError={branches.error?.message} onBranchChange={setBranchId} onNotice={setNotice} />} />
+          <Route path="/trips" element={<TripsPage companyId={companyId} branchId={branchId} branches={activeBranches} branchesError={branches.error?.message} onBranchChange={setBranchId} onNotice={setNotice} />} />
           <Route path="*" element={<Navigate to="/vehicles" replace />} />
         </Routes>}
       </Paper>

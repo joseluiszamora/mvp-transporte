@@ -22,11 +22,12 @@ La web inicia sesión contra `/api/v1/auth/login` de mvp-base y recibe un access
 | Autorización | `POST /api/v1/integrations/transport/authorize` | Cada lectura o escritura protegida envía Bearer, permiso exacto, empresa y sucursal opcional. Base vuelve a validar sesión, membresía y alcance. |
 | Empresas y sucursales | `GET /api/v1/organizations/companies` y `/organizations/branches` | La API devuelve a la web las opciones del contexto autenticado. Base aplica sus reglas de acceso. |
 | Personal | `GET /api/v1/employees?companyId=…` y `GET /api/v1/employees/{id}` | Los perfiles guardan solo `employeeId`. Antes de crear o reactivar, Transporte confirma que el empleado está activo y pertenece a la empresa. Estas rutas de Base requieren que el actor tenga `employees.read` además del permiso del producto. |
+| Viajes | `POST /api/v1/integrations/transport/authorize` y `POST /api/v1/integrations/transport/audit-events` | `transport.trips.*` protege lectura, planificación, asignación y transiciones; cada cambio conserva actor e historial en Transporte y se escribe en la auditoría común de Base. |
 | Auditoría | `POST /api/v1/integrations/transport/audit-events` | La API envía Bearer, acción, recurso y contexto derivado de su base. Base fija actor, organización e integración. Los usuarios que escriben también necesitan `transport.audit.write`. |
 | Archivos privados | `POST/GET /api/v1/integrations/transport/files/{resourceType}/{resourceId}?companyId=…&branchId=…` | Transporte registra `VEHICLE` y `EMPLOYEE`, envía `multipart/form-data` con el campo `file` y guarda el `fileId` retornado como referencia externa. |
 | Metadatos y descarga | `GET /api/v1/integrations/transport/files/{fileId}` y `GET /api/v1/integrations/transport/files/{fileId}/content` | El API valida otra vez la sesión y permisos del actor antes de consultar o entregar el contenido; el navegador nunca recibe una URL pública. |
 
-La interfaz REST de Transporte empieza en `/api/v1/transport`: vehículos, personal operativo, documentos, mantenimiento, combustible, empresas, sucursales, health, readiness y OpenAPI. La API primero carga sus recursos operativos, toma organización/empresa/sucursal de esos registros y luego pide autorización a Base. Nunca usa un ID del navegador como evidencia de pertenencia.
+La interfaz REST de Transporte empieza en `/api/v1/transport`: vehículos, personal operativo, viajes y asignaciones, documentos, mantenimiento, combustible, empresas, sucursales, health, readiness y OpenAPI. La API primero carga sus recursos operativos, toma organización/empresa/sucursal de esos registros y luego pide autorización a Base. Nunca usa un ID del navegador como evidencia de pertenencia.
 
 ## Límites y consistencia
 
