@@ -21,13 +21,13 @@ Consumir paquetes versionados si mvp-base ya ofrece módulos importables. Mientr
 - Se elige el submódulo porque el repositorio base y `@mvp-base/contracts` son privados; los contratos forman parte del workspace npm interno y no se encontró una distribución versionada separada para consumir desde este repositorio.
 - Para clonar mvp-transporte con la referencia inicializada, ejecutar `git submodule update --init --recursive`.
 - Para actualizar la referencia, revisar primero el nuevo commit de `main` en mvp-base; luego ejecutar `git -C mvp-base fetch origin main`, `git -C mvp-base checkout <commit-revisado>` y `git add mvp-base` desde la raíz de mvp-transporte. El cambio queda registrado como una nueva referencia del submódulo en el commit de mvp-transporte.
-- Esta decisión fija el código fuente, pero no conecta todavía la API, los contratos de ejecución ni las migraciones de base de datos. Esos contratos deben verificarse antes de implementar módulos de transporte.
+- Esta decisión fija el código fuente. La integración de ejecución y las bases independientes quedaron definidas en ADR-011 y en la guía [docs/integration/mvp-base.md](integration/mvp-base.md).
 
 ### Integración del contrato de producto — 2026-11-11
 
 - El propietario aceptó funcionalmente el contrato TASK-015, equivalente a TASK-007 de Transporte. El PR [#37](https://github.com/joseluiszamora/mvp-base/pull/37) se fusionó en `main` de mvp-base como `97c5840211e593a9fd91775fe30383a173feeb35`.
 - La revisión corrigió en `4804ee4` el listado de archivos que no filtraba por empresa y sucursal; `9331064` añadió la regresión. CI runs 59 y 60 pasaron. El submódulo de Transporte se actualiza a `97c5840` en esta rama.
-- La integración sigue por HTTP entre APIs y bases separadas. Transporte no importa fuentes privadas ni consulta las tablas de mvp-base; su API propia todavía está pendiente.
+- La integración sigue por HTTP entre APIs y bases separadas. Transporte no importa fuentes privadas ni consulta las tablas de mvp-base. La API/web propias empezaron en TASK-002.
 
 ## ADR-003 — Arquitectura modular
 
@@ -92,4 +92,4 @@ mvp-transporte y mvp-base se ejecutan como aplicaciones independientes y se inte
 
 La decisión mantiene repositorios, despliegues y migraciones independientes, como permite la estructura real de mvp-base, y evita una historia Prisma duplicada o una segunda implementación de las reglas de plataforma. Un endpoint de Transporte solo puede autorizarse cuando mvp-base valide la sesión del actor y su permiso en el alcance objetivo. Los IDs del cliente no son evidencia de autorización.
 
-La revisión fijada aún no ofrece el contexto de permisos con alcance para códigos `transport.*`, un contrato de escritura de auditoría ni tipos de archivo para vehículos. TASK-007 registra esa extensión como dependencia externa. No se habilitarán escrituras de Transporte hasta que se integre.
+El contrato de producto de mvp-base, integrado en el commit `97c5840211e593a9fd91775fe30383a173feeb35`, permite validar permisos `transport.*` por empresa/sucursal, guardar archivos externos y escribir auditoría. TASK-007 quedó completada. La API de Transporte debe llamar a estos endpoints públicos y derivar el alcance de sus propios recursos antes de autorizar operaciones.

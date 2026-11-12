@@ -43,30 +43,30 @@ flowchart TB
 
 ## Aislamiento multiempresa
 
-1. mvp-base autentica al usuario y selecciona una organización. En la revisión fijada no existe una empresa activa seleccionada en sesión.
-2. La API de Transporte valida la sesión y el alcance del actor con una interfaz pública de mvp-base antes de leer o escribir recursos.
-3. El `companyId` de una solicitud identifica el recurso objetivo; mvp-base debe validar organización, empresa, sucursal y permiso para ese objetivo. El valor nunca se usa por sí solo para autorizar.
+1. mvp-base autentica al usuario y selecciona una organización. La sesión no selecciona una empresa activa.
+2. La API de Transporte carga el recurso desde su propia base, deriva su empresa y sucursal y llama a `POST /api/v1/integrations/transport/authorize` en cada operación.
+3. El `companyId` enviado por el navegador solo puede seleccionar un objetivo para crear/listar; mvp-base valida organización, empresa, sucursal y permiso, y la API usa el alcance devuelto por Base.
 4. Cada lectura, escritura y relación filtra por organización/empresa y comprueba los IDs relacionados mediante el contrato de plataforma.
 5. Los índices únicos de negocio, como la placa, se definen dentro de la base de Transporte y el alcance empresarial.
 
-El contrato actual de mvp-base no devuelve alcances de permiso en `/auth/me` ni ofrece permisos `transport.*`. TASK-007 registra la extensión necesaria. Hasta que se implemente, no se deben abrir endpoints de escritura de Transporte.
+El contrato integrado de mvp-base (`97c5840`) valida sesiones, membresías y permisos `transport.*` por alcance. La API de Transporte no debe interpretar `/auth/me` como fuente de permisos autorizados ni verificar localmente el Bearer.
 
 ## Organización del código
 
 - `apps/api`: API propia de Transporte, composición Express y módulos de transporte.
 - `apps/web`: navegación y pantallas web de Transporte.
 - `packages/shared-contracts`: contratos propios de Transporte realmente compartidos entre API y web.
-- `mvp-base/`: submódulo Git en la revisión registrada en ADR-002; conserva su workspace, API y base independientes.
+- `mvp-base/`: submódulo Git fijado a `97c5840`; conserva su workspace, API y base independientes.
 - `docs/`: especificación funcional, decisiones, modelo de datos y tareas.
 
-Los scripts de raíz delegan en los comandos existentes de mvp-base mientras Transporte no tenga aplicaciones propias. No forman un workspace combinado.
+Los workspaces de `apps/api`, `apps/web` y `packages/shared-contracts` pertenecen a Transporte. Los scripts de raíz ejecutan sus comandos y los de mvp-base por separado. El submódulo conserva su workspace, dependencias, API y migraciones.
 
 ## Contratos entre módulos
 
-- Personal expone una referencia estable al empleado; Transporte añade perfiles de conductor y ayudante sin duplicar la identidad.
-- Archivos debe recibir y devolver referencias autorizadas para recursos de transporte; la revisión fijada aún no contempla vehículos como tipo de recurso.
-- Auditoría debe registrar actor, empresa, acción y recurso para cambios sensibles; la revisión fijada solo expone lectura de auditoría y escritura interna.
-- El módulo de permisos debe validar códigos `transport.*` por organización, empresa y sucursal. La revisión fijada devuelve códigos planos y no define dichos permisos.
+- Personal expone empleados por API; Transporte valida el empleado y guarda solo su ID externo en los perfiles de conductor/ayudante.
+- Archivos externos de vehículos se gestionan mediante el contrato de Base; no se crea almacenamiento paralelo.
+- Auditoría de Transporte se registra en Base con el Bearer del actor y el alcance derivado de la solicitud autorizada.
+- La API registra sus permisos `transport.*` en Base y solicita autorización contextual por organización, empresa y sucursal.
 - Viajes podrá enlazarse con una planificación de distribución cuando su modelo esté definido; no se crea ahora un módulo de rutas permanentes.
 
 Los límites, APIs revisadas y brechas están detallados en [docs/integration/mvp-base.md](integration/mvp-base.md).

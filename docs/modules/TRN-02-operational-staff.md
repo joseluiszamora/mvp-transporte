@@ -14,6 +14,8 @@ Agregar capacidades operativas de transporte al personal ya administrado por mvp
 
 La ficha general de identidad, contacto y empleo sigue perteneciendo a mvp-base.
 
+La API y la pantalla inicial están en `apps/api/src/modules/operational-staff` y `apps/web/src/modules/operational-staff`. Antes de crear o reactivar un perfil, Transporte consulta la API de Employee y confirma estado ACTIVE y empresa. La consulta de nombres/códigos requiere `employees.read` además del permiso de perfiles de transporte.
+
 ## Reglas de negocio
 
 - DriverProfile y AssistantProfile se vinculan al Employee existente.

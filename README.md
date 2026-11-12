@@ -1,13 +1,13 @@
 # mvp-transporte
 
-Producto de transporte que usa mvp-base para identidad, empresas, permisos, personal, archivos, auditoría, configuración y catálogos. El repositorio está en la fase de integración: todavía no contiene una API, web ni módulos de transporte propios.
+Producto de transporte que usa mvp-base para identidad, empresas, permisos, personal, archivos, auditoría, configuración y catálogos. La primera entrega vertical implementa vehículos y perfiles de personal operativo en una API y una web propias.
 
 ## Estado actual
 
 - `mvp-base/` es un submódulo fijado al commit registrado en [las decisiones del proyecto](docs/decisions.md).
-- La integración de ejecución se realizará por HTTP entre APIs independientes. Cada producto conserva su base de datos y sus migraciones.
-- El contrato de autorización por alcance, auditoría y archivos externos ya está integrado en `main` de mvp-base, commit `97c5840`. El submódulo queda fijado a esa revisión. CI runs 59 y 60 pasaron después de corregir el aislamiento del listado de archivos y añadir una regresión. Transporte todavía no tiene API propia; el uso del contrato se documenta en [docs/integration/mvp-base.md](docs/integration/mvp-base.md) y [TASK-007](docs/tasks/TASK-007-mvp-base-integration-contract.md).
-- Los comandos de raíz delegan a mvp-base mientras Transporte todavía no tenga aplicaciones propias.
+- mvp-base y Transporte se comunican por HTTP y conservan bases y migraciones separadas.
+- El contrato de autorización por alcance, auditoría y archivos externos quedó integrado en `main` de mvp-base en `97c5840`; el submódulo está fijado a esa revisión. CI runs 59 y 60 pasaron tras corregir el aislamiento de archivos. Transporte registra permisos al arrancar y valida cada operación con Base.
+- TASK-002 desarrolla vehículos con capacidad en kg y perfiles de conductor/ayudante ligados a Employee. La API no duplica identidad ni tablas de mvp-base.
 
 ## Requisitos
 
@@ -22,14 +22,21 @@ Desde una clonación existente, inicializa el submódulo y sus dependencias:
 ```sh
 git submodule update --init --recursive
 npm run setup:base
+npm install
 ```
 
-Copia `mvp-base/.env.example` a `mvp-base/.env` y configura los valores locales. El archivo de ejemplo contiene valores ficticios. No compartas ni registres secretos.
+Copia `mvp-base/.env.example` a `mvp-base/.env` y `.env.example` a `.env` en la raíz de Transporte. Configura credenciales locales ficticias para ambos productos. En `mvp-base/.env`, define la clave `transport` en `MVP_INTEGRATION_SECRETS_JSON` con el mismo valor de `MVP_BASE_INTEGRATION_KEY`, y añade `http://localhost:5174` a `WEB_ORIGINS`. Genera una clave aleatoria de 32 bytes para desarrollo con `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`; nunca uses secretos de producción en esta instalación.
 
-Inicia PostgreSQL y Mailpit desde la raíz:
+Inicia PostgreSQL y Mailpit de mvp-base según su configuración local:
 
 ```sh
 docker compose --env-file mvp-base/.env -f mvp-base/compose.yaml up -d
+```
+
+Inicia la base independiente de Transporte desde esta raíz:
+
+```sh
+docker compose up -d
 ```
 
 Genera el cliente y aplica migraciones y fixtures de desarrollo:
@@ -40,14 +47,16 @@ npm run db:migrate:dev
 npm run db:seed
 ```
 
-Inicia la API y la web en terminales separadas:
+Inicia API y web de Base y de Transporte en terminales separadas:
 
 ```sh
 npm run dev:base-api
 npm run dev:base-web
+npm run dev:api
+npm run dev:web
 ```
 
-La API queda en `http://127.0.0.1:4000`; la web, en `http://127.0.0.1:5173`. El worker de correo es opcional durante la revisión inicial:
+La API de Base queda en `http://localhost:4000`; su web, en `http://localhost:5173`. Transporte usa `http://localhost:4100` para API y `http://localhost:5174` para web. El worker de correo de Base es opcional durante el desarrollo local:
 
 ```sh
 npm run dev:base-email-worker
@@ -57,7 +66,7 @@ La configuración detallada de secretos, correo, archivos y administración inic
 
 ## Comandos de validación
 
-Estos comandos delegan a los scripts existentes de mvp-base. No incluyen código de transporte hasta que las aplicaciones de este repositorio se implementen.
+Los comandos de raíz validan primero el código de Transporte y luego ejecutan los scripts existentes de mvp-base. `db:migrate:dev` aplica las migraciones de ambos productos contra sus respectivas bases.
 
 ```sh
 npm run lint

@@ -2,56 +2,46 @@
 
 ## Revisión fijada
 
-El submódulo de esta rama queda fijado al commit integrado `97c5840211e593a9fd91775fe30383a173feeb35` de `main` de mvp-base. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) se fusionó después de la aceptación funcional y la revisión técnica.
+El submódulo está fijado al commit `97c5840211e593a9fd91775fe30383a173feeb35` de `main` de mvp-base. El PR #37 integró TASK-015, equivalente a TASK-007 de Transporte, y fue aceptado por el propietario. La integración aporta autorización contextual para APIs de producto, registro de permisos, archivos externos privados y escritura de auditoría.
 
-La revisión corrigió en `4804ee4` el filtro de empresa y sucursal del listado de archivos externos; `9331064` añadió una regresión para otros alcances. CI run 59 pasó con esa corrección y CI run 60 pasó tras actualizar el seguimiento de TASK-015.
+El contrato fue revisado en [la guía de APIs de producto de mvp-base](https://github.com/joseluiszamora/mvp-base/blob/97c5840211e593a9fd91775fe30383a173feeb35/docs/integration/product-apis.md). Transporte no importa código interno de Base, no lee su base de datos y no instala su workspace npm como dependencia.
 
-## Límite de ejecución
+## Servicios y credenciales
 
-`mvp-transporte` y `mvp-base` se ejecutan como aplicaciones independientes y se comunican por HTTP. Transporte no importa archivos de `mvp-base/apps/**/src`, no instala sus workspaces como si fueran paquetes públicos y no consulta directamente sus tablas.
+Cada producto corre como API independiente y conserva su propia base PostgreSQL. Transporte usa `mvp_transport_local` en el puerto local 5433; mvp-base mantiene su puerto y esquema existentes. La web de Transporte corre en `http://localhost:5174`, la API de Transporte en `http://localhost:4100`, y la API local de Base se configura con `MVP_BASE_API_URL` (por defecto `http://localhost:4000/api/v1`).
 
-Cada producto administra su propia base PostgreSQL y su historial de migraciones. La base administra los modelos de plataforma; Transporte almacena sus propios modelos y conserva los IDs de organización, empresa, sucursal, empleado y archivo como referencias externas. Un ID recibido del cliente identifica un recurso solicitado, pero nunca autoriza la operación por sí mismo.
+Configura una credencial aleatoria de al menos 32 caracteres como servicio `transport` en `MVP_INTEGRATION_SECRETS_JSON` de mvp-base y como `MVP_BASE_INTEGRATION_KEY` en el `.env` raíz de Transporte. La clave se envía solo desde la API de Transporte en `X-MVP-Integration-Key`; no se incluye en Vite, el navegador ni la app móvil. En mvp-base agrega `http://localhost:5174` a `WEB_ORIGINS` para permitir login, renovación y cierre de sesión desde la web de Transporte.
 
-La web de Transporte autenticará y renovará sesiones mediante mvp-base. En cada operación de Transporte, el backend deberá validar la sesión y el alcance del actor con una interfaz pública de mvp-base. No deberá verificar localmente el JWT ni confiar en `companyId`, `organizationId`, permisos o identidad enviados en headers o en el cuerpo.
+La web inicia sesión contra `/api/v1/auth/login` de mvp-base y recibe un access token, la organización seleccionada y un token CSRF. Conserva el access token solo en memoria; el refresh token permanece en la cookie HttpOnly de Base. La web conserva el valor CSRF en `sessionStorage` para renovar la sesión al recargar la página y envía `credentials: include` en las llamadas de autenticación. El cierre de sesión llama a `/api/v1/auth/logout` de Base.
 
-## Capacidades base verificadas en `52f2e449`
+## Operaciones usadas
 
-| Capacidad | Interfaz disponible | Límite para Transporte |
+| Uso | Contrato público de mvp-base | Comportamiento de Transporte |
 |---|---|---|
-| Autenticación | `POST /api/v1/auth/login`, `/refresh`, `/select-organization`; `GET /api/v1/auth/me` | `/auth/me` devuelve organización seleccionada y códigos de permisos sin sus alcances por organización, empresa o sucursal. El token contiene usuario, sesión y membresía seleccionada; no incluye concesiones de permiso. |
-| Empresas y sucursales | Rutas de `/api/v1/organizations/companies` y `/branches` | No existe un selector de empresa activa en la sesión. Los recursos de Transporte deberán autorizarse contra la empresa objetivo mediante contexto validado por mvp-base. |
-| Personal | `GET /api/v1/employees`, `GET /api/v1/employees/{id}` y documentos | Se puede reutilizar el personal existente; Transporte no crea otra tabla de empleados. Las verificaciones se hacen con la API y el token del actor. |
-| Archivos | `/api/v1/files` y endpoints de documentos de empleado | Los tipos aceptados son empresa, sucursal y empleado. No existe un tipo ni una autorización para documentos de vehículos. |
-| Auditoría | `GET /api/v1/audit` y `GET /api/v1/audit/{id}` | La escritura se realiza dentro de servicios internos de mvp-base; no hay endpoint público para registrar eventos de Transporte. |
-| Catálogos y configuración | APIs de catálogos y configuración | Reutilizar cuando el dato pertenezca a la plataforma; los catálogos específicos del dominio se acuerdan con mvp-base antes de duplicarlos. |
-| Contratos TypeScript | `@mvp-base/contracts` dentro del workspace npm privado | Publica tipos de request/response, no un cliente de API, middleware de sesión o paquete de servicios para integrar en otro repo. |
+| Registro de permisos | `PUT /api/v1/integrations/transport/registration` | La API registra de forma idempotente el manifiesto `transport.*` al arrancar. Envía solo la clave de servicio. |
+| Autorización | `POST /api/v1/integrations/transport/authorize` | Cada lectura o escritura protegida envía Bearer, permiso exacto, empresa y sucursal opcional. Base vuelve a validar sesión, membresía y alcance. |
+| Empresas y sucursales | `GET /api/v1/organizations/companies` y `/organizations/branches` | La API devuelve a la web las opciones del contexto autenticado. Base aplica sus reglas de acceso. |
+| Personal | `GET /api/v1/employees?companyId=…` y `GET /api/v1/employees/{id}` | Los perfiles guardan solo `employeeId`. Antes de crear o reactivar, Transporte confirma que el empleado está activo y pertenece a la empresa. Estas rutas de Base requieren que el actor tenga `employees.read` además del permiso del producto. |
+| Auditoría | `POST /api/v1/integrations/transport/audit-events` | La API envía Bearer, acción, recurso y contexto derivado de su base. Base fija actor, organización e integración. Los usuarios que escriben también necesitan `transport.audit.write`. |
+| Archivos privados | `POST/GET /api/v1/integrations/transport/files/{resourceType}/{resourceId}?companyId=…&branchId=…` | Transporte registra `VEHICLE` y `EMPLOYEE`, envía `multipart/form-data` con el campo `file` y guarda el `fileId` retornado como referencia externa. |
+| Metadatos y descarga | `GET /api/v1/integrations/transport/files/{fileId}` y `GET /api/v1/integrations/transport/files/{fileId}/content` | El API valida otra vez la sesión y permisos del actor antes de consultar o entregar el contenido; el navegador nunca recibe una URL pública. |
 
-La API expone su documento OpenAPI en `/api/v1/openapi.json`. La aplicación y las rutas están compuestas dentro de `mvp-base/apps/api`; el paquete de contratos no proporciona un punto de extensión para montar módulos de Transporte.
+La interfaz REST de Transporte empieza en `/api/v1/transport`: vehículos, personal operativo, documentos, mantenimiento, combustible, empresas, sucursales, health, readiness y OpenAPI. La API primero carga sus recursos operativos, toma organización/empresa/sucursal de esos registros y luego pide autorización a Base. Nunca usa un ID del navegador como evidencia de pertenencia.
 
-## Contrato de producto integrado en `97c5840`
+## Límites y consistencia
 
-El PR #37 integró en mvp-base la tarea `TASK-015`, equivalente a TASK-007 de Transporte. El contrato ofrece autenticación de servicio mediante `X-MVP-Integration-Key` y revalidación del usuario con Bearer en cada operación; registro de permisos namespaced; autorización contextual por empresa/sucursal; manejo privado de archivos para recursos externos; y escritura de auditoría con actor y alcance derivados por Base. Base verifica que empresa y sucursal existan en la organización y evalúa el permiso, pero no demuestra que el ID de recurso externo pertenezca a ese alcance. La API de Transporte debe cargar su propio recurso y derivar empresa/sucursal desde su base antes de invocar Base; no debe confiar en valores del navegador. Los detalles están en la [guía de APIs de producto de mvp-base](https://github.com/joseluiszamora/mvp-base/blob/97c5840211e593a9fd91775fe30383a173feeb35/docs/integration/product-apis.md) y en [TASK-015](https://github.com/joseluiszamora/mvp-base/blob/97c5840211e593a9fd91775fe30383a173feeb35/docs/tasks/TASK-015.md).
+- `mvp-base` es dueño de identidad, organizaciones, empresas, sucursales, empleados, permisos, archivos y auditoría.
+- Transporte es dueño de vehículos y perfiles operativos. Sus tablas almacenan IDs Base como referencias externas sin claves foráneas entre bases.
+- Las operaciones que escriben datos requieren que Base esté disponible y autorice la acción. La auditoría remota se solicita dentro de la transacción local antes del commit para cancelar la escritura si Base rechaza la auditoría. Como son dos bases independientes, si Base guarda la auditoría y luego falla el commit local, puede quedar un evento sin cambio local correspondiente; se registra el ID del recurso en el evento para facilitar reconciliación.
+- Los registros de vehículo y perfil se desactivan con estado `INACTIVE`; el historial no se elimina físicamente.
 
-CI runs 56, 57, 59 y 60 pasaron. El propietario aceptó el contrato y mvp-base lo integró en `main` mediante `97c5840`.
+## Instalación combinada local
 
-## Requisitos antes de habilitar datos de transporte
+1. Inicializa el submódulo y prepara los paquetes de ambos repositorios con `git submodule update --init --recursive`, `npm run setup:base` y `npm install` en la raíz de Transporte.
+2. Copia `mvp-base/.env.example` a `mvp-base/.env` y `.env.example` a `.env` de Transporte. Configura la base independiente en `TRANSPORT_DATABASE_URL`.
+3. Configura en `mvp-base/.env` su secreto `transport` y agrega `http://localhost:5174` a `WEB_ORIGINS`.
+4. Levanta ambas bases: ejecuta el Compose de mvp-base según su README y luego `docker compose up -d` desde Transporte para iniciar su PostgreSQL en 5433.
+5. Aplica migraciones con `npm run db:migrate:dev`; el comando ejecuta los scripts de Base y Transporte contra sus URLs respectivas. Usa `npm run db:generate` para generar ambos clientes.
+6. Arranca en terminales separadas `npm run dev:base-api`, `npm run dev:base-web`, `npm run dev:api` y `npm run dev:web`.
 
-El contrato está integrado en Base. Al implementar operaciones de Transporte, la API deberá:
-
-1. Validar un token en curso y devolver contexto confiable de usuario, organización y membresía, junto con permisos y alcances por empresa/sucursal para códigos registrados por el producto de transporte. La revocación o suspensión de sesión/membresía debe reflejarse en esa validación.
-2. Permitir registrar permisos `transport.*` mediante una extensión pública y mantener su administración dentro del módulo común de permisos.
-3. Autorizar y asociar archivos a recursos de Transporte, incluidos vehículos, y conservar la protección de descarga y el aislamiento empresarial.
-4. Aceptar eventos de auditoría de Transporte mediante un contrato autenticado que establezca actor, organización, recurso, acción y validación de alcance.
-
-La integración con Base ya está lista, pero mvp-transporte todavía no tiene API propia. Sus futuras escrituras deben usar este contrato público y no importar código interno ni consultar las tablas de mvp-base.
-
-## Instalación y migraciones
-
-El README raíz prepara y valida el estado actual ejecutable de mvp-base. Su base de datos, archivos privados y migraciones permanecen bajo el control de mvp-base. Cuando Transporte tenga aplicación, usará una base y migraciones propias; la instalación combinada iniciará ambos servicios y aplicará las migraciones de cada proyecto por separado. No se debe ejecutar una carpeta de migraciones de Prisma contra una base que también contiene el historial de migraciones del otro repositorio.
-
-## Actualizar el submódulo
-
-1. Revisar el cambio en mvp-base y confirmar que el contrato público requerido está integrado en su rama principal.
-2. Cambiar la referencia del submódulo al commit revisado.
-3. Actualizar esta ficha, [TASK-001](../tasks/TASK-001-integrate-mvp-base.md), la documentación de arquitectura y los comandos que hayan cambiado.
-4. Ejecutar las validaciones relevantes de ambos repositorios y registrar los resultados en la tarea.
+Para una instalación nueva, el README raíz contiene la secuencia y los comandos existentes. No ejecutes las migraciones de un producto contra la base del otro.

@@ -2,7 +2,7 @@
 
 ## Estado
 
-Todos los entregables comienzan en estado **Pendiente**. Actualizar este archivo cuando una tarea se integre en main.
+Actualizar el estado según el trabajo y el Pull Request de cada entrega. Se marca **Completado** cuando el cambio se integra en `main`.
 
 Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
@@ -10,9 +10,9 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
 | Fase | Entrega | Dependencias | Milestone GitHub | Estado |
 |---|---|---|---|---|
-| 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura; TASK-007 | M0 - Base del producto | En curso |
-| 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | Pendiente |
-| 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | Pendiente |
+| 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura; TASK-007 | M0 - Base del producto | En revisión |
+| 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | En curso |
+| 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | En curso |
 | 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | Pendiente |
 | 4 | App móvil para conductor | API de viajes estable | M4 - Operación móvil | Pendiente |
 | 5 | Integración y versión inicial | Fases 1–4 y revisión de permisos | M5 - Versión inicial | Pendiente |
@@ -21,9 +21,9 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
 - Inspeccionar mvp-base: paquetes, contratos, autenticación, empresa activa, personal, archivos, permisos, auditoría, Prisma y comandos.
 - Fijar integración con paquete versionado si existe; de lo contrario, evaluar submódulo con commit/tag exacto.
-- Crear API/web en monorepo, configuración local, documentación y controles de GitHub.
-- Salida: aplicación local arranca y no duplica módulos base.
-- Dependencia identificada: TASK-007 debe exponer autorización contextual, archivos para recursos de transporte y escritura de auditoría. La aplicación de transporte no debe habilitar escrituras antes de esa integración.
+- Se crearon API/web en el monorepo y se fijó el contrato HTTP de mvp-base.
+- Salida: aplicaciones independientes con configuración local y sin duplicación de módulos base.
+- TASK-007 fue aceptada e integrada en mvp-base. El Pull Request de TASK-001 en Transporte sigue en revisión.
 
 ## Fase 1 — Recursos principales
 

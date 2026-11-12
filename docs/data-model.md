@@ -2,7 +2,7 @@
 
 ## Propósito y estado
 
-Este documento define el modelo conceptual inicial. Los nombres son sugeridos; antes de crear migraciones deben contrastarse con los nombres, IDs, tenant model y estrategia Prisma de mvp-base.
+Este documento combina el modelo conceptual del producto con los modelos implementados por TASK-002 y TASK-003. Las entidades de viajes siguen siendo propuestas y deberán revisarse antes de crear sus migraciones.
 
 ## Entidades de mvp-base reutilizadas
 
@@ -17,13 +17,13 @@ No volver a crear estas entidades en mvp-transporte:
 
 La relación exacta debe seguir el esquema real de mvp-base.
 
-Estos modelos pertenecen a la base de datos de mvp-base. La base de Transporte no replica sus tablas ni mantiene claves foráneas entre bases. Los modelos de Transporte guardan IDs externos para `organizationId`, `companyId`, `branchId`, `employeeId` y `fileId`; cada relación se valida a través de los contratos autorizados de mvp-base. Hasta que estén disponibles la autorización contextual y los contratos de archivo/auditoría requeridos, no se implementan operaciones de escritura que dependan de ellos. Ver [contrato de integración](integration/mvp-base.md).
+Estos modelos pertenecen a la base de datos de mvp-base. La base de Transporte no replica sus tablas ni mantiene claves foráneas entre bases. Los modelos de Transporte guardan IDs externos para `organizationId`, `companyId`, `branchId`, `employeeId` y `fileId`; cada relación se valida a través de los contratos autorizados de mvp-base, integrados en `97c5840`. Ver [contrato de integración](integration/mvp-base.md).
 
 ## Entidades de transporte
 
 | Entidad | Responsabilidad | Relaciones principales |
 |---|---|---|
-| Vehicle | Datos y disponibilidad del vehículo | Referencias externas a empresa/sucursal; documentos, viajes, mantenimiento y tanques de Transporte |
+| Vehicle | Identidad, capacidad y estado administrativo del vehículo | Referencias externas a organización/empresa/sucursal; documentos, viajes, mantenimiento y tanques de Transporte |
 | DriverProfile | Datos operativos del conductor | Referencia externa a Employee |
 | AssistantProfile | Datos operativos del ayudante propio | Referencia externa a Employee |
 | TransportTrip | Operación de transporte en una fecha o periodo | Vehicle, tripulación y paradas |
@@ -34,6 +34,18 @@ Estos modelos pertenecen a la base de datos de mvp-base. La base de Transporte n
 | MaintenanceRecord | Mantenimiento correctivo o servicio realizado | Vehicle y opcionalmente MaintenancePlan |
 | VehicleFuelTank | Tanque instalado y combustible/unidad admitidos | Vehicle |
 | FuelRecord | Carga de combustible y medición | VehicleFuelTank y opcionalmente TransportTrip |
+
+### Modelos implementados en TASK-002 y TASK-003
+
+`Vehicle` guarda `organizationId`, `companyId`, `branchId` opcional, placa y placa normalizada, tipo, marca, modelo, año opcional, `capacityKg` decimal, `odometerKm` entero opcional, estado administrativo y marcas de tiempo. La placa normalizada es única por empresa; la capacidad debe ser mayor que cero y el odómetro no puede ser negativo ni reducirse mediante la API.
+
+`DriverProfile` y `AssistantProfile` guardan los IDs externos de organización, empresa y empleado, estado y marcas de tiempo. Cada perfil es único por empresa y empleado; los dos perfiles usan tablas distintas, así que una persona puede tener ambos. La API comprueba en mvp-base que el empleado esté activo y pertenezca a la empresa antes de crear o reactivar.
+
+`ResourceDocument` relaciona exactamente un vehículo local o un ID externo de empleado con un `fileId` de mvp-base, fechas opcionales y tipo. Renovar crea un registro nuevo que apunta al anterior y marca el anterior como `SUPERSEDED`; el archivo se descarga desde Base solo después de revalidar permisos. La migración de TASK-003 se aplicó en `mvp_transport_local` el 2026-11-12.
+
+`MaintenancePlan` configura un intervalo positivo en km, días o ambos, y guarda el siguiente objetivo por km/fecha con su ventana. `MaintenanceRecord` conserva tareas programadas, en curso, completadas o canceladas; registrar el odómetro actualiza el del vehículo. `outOfService` solo puede ser verdadero durante un registro `IN_PROGRESS`.
+
+`VehicleFuelTank` fija combustible, unidad y capacidad para un vehículo. `FuelRecord` referencia el tanque y guarda una instantánea de combustible/unidad, cantidad, costo total, moneda, fecha, proveedor y kilometraje. Una restricción de base verifica que tanque, vehículo y alcance coincidan. No se guarda precio unitario ni vínculo a viaje en esta entrega.
 
 ## Relaciones principales
 
@@ -67,11 +79,15 @@ El diagrama muestra relaciones conceptuales. ResourceDocument debe referenciar v
 - Las relaciones con empresa, sucursal, empleado y archivo se validan por los contratos de mvp-base; no hay claves foráneas entre bases.
 - Las consultas se filtran por empresa objetivo y organización validadas en backend. mvp-base actualmente selecciona organización, no empresa activa.
 - La placa es única por empresa, incluyendo recursos desactivados que mantengan historial.
+- La capacidad de carga se guarda en kilogramos (`capacityKg`); el odómetro se guarda en kilómetros (`odometerKm`).
+- El estado administrativo del vehículo es ACTIVE/INACTIVE. El bloqueo por mantenimiento se calcula a partir de un registro IN_PROGRESS con `outOfService` y se expone como `maintenanceBlocked`; TASK-004 deberá rechazar la asignación mientras siga activo ese bloqueo.
 
 ### Personal y tripulación
 
 - Los perfiles de conductor y ayudante se asocian al Employee existente.
 - Una persona puede tener ambos perfiles.
+- DriverProfile y AssistantProfile guardan `employeeId` y `companyId` externos; no duplican nombres, documentos ni contactos.
+- Cada perfil valida que el empleado exista, esté activo y pertenezca a la empresa indicada mediante la API pública de mvp-base.
 - Una asignación interna requiere un empleado activo con perfil compatible con su rol.
 - Un ayudante del cliente se representa con origen CLIENTE, Employee nulo y nombre externo opcional.
 - Cada viaje de distribución registra de uno a dos ayudantes totales entre internos y externos.
@@ -102,14 +118,16 @@ El diagrama muestra relaciones conceptuales. ResourceDocument debe referenciar v
 - MaintenancePlan permite intervalo por kilometraje, intervalo de tiempo opcional y una ventana de fechas prevista.
 - Completar un servicio enlazado al plan actualiza el próximo vencimiento conservando el historial.
 - Un vehículo fuera de servicio no se asigna a un viaje nuevo.
+- La API devuelve `maintenanceBlocked`; la aplicación del bloqueo a asignaciones queda vinculada a TASK-004, aún pendiente.
 
 ### Combustible
 
 - Un vehículo puede tener varios tanques y tipos de combustible.
 - VehicleFuelTank define tipo, capacidad y unidad.
-- FuelRecord pertenece a un tanque; guarda cantidad, unidad, precio unitario, importe total, fecha, kilometraje, proveedor y comprobante.
+- FuelRecord pertenece a un tanque activo del vehículo al momento de la carga; guarda cantidad, unidad, importe total, moneda, fecha, kilometraje y proveedor opcional.
 - Volúmenes de gasolina y GNV se reportan por separado. Los importes monetarios pueden sumarse en la moneda configurada.
-- El kilometraje no puede disminuir sin una corrección explícita auditada.
+- Gasolina usa litros; GNV usa metros cúbicos o kilogramos. Los reportes se agrupan también por unidad y moneda.
+- En los registros actuales el kilometraje no puede disminuir ni borrarse mediante edición normal. Una futura corrección del dato deberá usar una acción separada y auditada.
 
 ## Evolución futura
 
