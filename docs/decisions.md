@@ -23,6 +23,12 @@ Consumir paquetes versionados si mvp-base ya ofrece módulos importables. Mientr
 - Para actualizar la referencia, revisar primero el nuevo commit de `main` en mvp-base; luego ejecutar `git -C mvp-base fetch origin main`, `git -C mvp-base checkout <commit-revisado>` y `git add mvp-base` desde la raíz de mvp-transporte. El cambio queda registrado como una nueva referencia del submódulo en el commit de mvp-transporte.
 - Esta decisión fija el código fuente, pero no conecta todavía la API, los contratos de ejecución ni las migraciones de base de datos. Esos contratos deben verificarse antes de implementar módulos de transporte.
 
+### Estado de la referencia candidata — 2026-11-11
+
+- La rama actual de mvp-transporte fija el submódulo en `8435ec91e8c8e2370684904afd4bc8df0bda737d`, rama `task/007-transport-integration-contract` de mvp-base. Ese commit implementa TASK-015, equivalente a TASK-007 de Transporte.
+- `main` de mvp-base aún apunta a `52f2e449dcf3a8109481fed55117327f1bd59b38`. El PR [#37](https://github.com/joseluiszamora/mvp-base/pull/37) sigue abierto y listo para revisión. La revisión técnica detectó y corrigió en `4804ee4` un listado de archivos que no filtraba por empresa y sucursal; `9331064` agrega la prueba de regresión y CI run 59 pasó. Falta una revisión independiente. El submódulo de Transporte se mantiene en `8435ec9` hasta que Base integre el PR.
+- El pin actual se considera candidato de revisión. Antes de integrar este cambio en `main` de mvp-transporte, mvp-base debe completar la validación e integrar el contrato en su rama principal; luego se actualizará el gitlink al commit integrado y se volverán a sincronizar las referencias documentales.
+
 ## ADR-003 — Arquitectura modular
 
 **Estado:** Aprobada  

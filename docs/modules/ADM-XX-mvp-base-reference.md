@@ -4,7 +4,7 @@
 
 Identificar las dependencias de plataforma usadas por mvp-transporte. Esta ficha resume las interfaces verificadas; la documentación funcional vigente de cada ADM se mantiene en el repositorio mvp-base.
 
-La revisión analizada es el commit `52f2e449dcf3a8109481fed55117327f1bd59b38`. La integración de ejecución se documenta en [docs/integration/mvp-base.md](../integration/mvp-base.md).
+La tabla de interfaces de esta ficha describe `main` de mvp-base en `52f2e449dcf3a8109481fed55117327f1bd59b38`. El submódulo de la rama actual apunta al candidato `8435ec91e8c8e2370684904afd4bc8df0bda737d`; el PR #37 continúa el trabajo hasta `9331064`, con corrección de alcance y regresión, y aún no está integrado en `main`. La integración de ejecución y el estado de ambas revisiones se documentan en [docs/integration/mvp-base.md](../integration/mvp-base.md).
 
 ## Módulos seleccionados
 
@@ -39,13 +39,13 @@ La selección no duplica tablas, permisos ni reglas de mvp-base y no compromete 
 
 La especificación OpenAPI está disponible en `/api/v1/openapi.json`. Las rutas actuales están montadas por la aplicación de mvp-base. No se debe importar `mvp-base/apps/api/src/**` para suplir contratos públicos que faltan.
 
-## Contratos pendientes
+## Contrato candidato pendiente de integración
 
-TASK-007 especifica la extensión que debe implementarse y publicarse desde mvp-base antes de abrir escrituras de Transporte:
+El candidato `8435ec91` implementa en mvp-base la extensión requerida por TASK-007 bajo el identificador TASK-015:
 
-- Validación de sesión y permiso con alcance para códigos `transport.*` y el recurso objetivo.
-- Extensión controlada del catálogo común de permisos para los códigos del producto.
-- Archivos asociados a vehículos y otros recursos externos, con comprobación de alcance y protección de descarga.
-- Ingreso autenticado de eventos de auditoría con actor validado por mvp-base.
+- Autenticación del servicio consumidor y revalidación de sesión/membresía del usuario.
+- Registro de permisos `transport.*` y autorización contextual por empresa/sucursal.
+- Archivos privados asociados a recursos externos, sujetos a permisos comunes y específicos.
+- Ingreso autenticado de auditoría con actor y alcance derivados de Base.
 
-No inventar endpoints ni nombres de permiso. Esta ficha se actualiza con el contrato real al integrar el cambio del repositorio base.
+CI runs 56, 57 y 59 pasaron; el último corresponde a la cabeza `9331064` e incluye la regresión del aislamiento por empresa y sucursal. El PR #37 está listo para revisión independiente; hasta que se fusione a `main` de mvp-base, no habilitar escrituras ni depender de esta interfaz como contrato estable. La [guía candidata de APIs de producto](https://github.com/joseluiszamora/mvp-base/blob/933106429797d5d488279758ca3763c6e43d66da/docs/integration/product-apis.md) contiene los endpoints y esquemas concretos.
