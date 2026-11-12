@@ -6,7 +6,7 @@ Producto de transporte que usa mvp-base para identidad, empresas, permisos, pers
 
 - `mvp-base/` es un submódulo fijado al commit registrado en [las decisiones del proyecto](docs/decisions.md).
 - La integración de ejecución se realizará por HTTP entre APIs independientes. Cada producto conserva su base de datos y sus migraciones.
-- El contrato de autorización por alcance, auditoría y archivos externos tiene un PR listo para revisión en mvp-base ([#37](https://github.com/joseluiszamora/mvp-base/pull/37)). La revisión técnica corrigió el aislamiento empresarial y por sucursal del listado de archivos, y agregó una regresión; CI run 59 pasó en `9331064`. `main` aún no incluye el contrato y falta la revisión independiente. Transporte no debe habilitar escrituras hasta que Base integre el cambio. Estado y detalle en [docs/integration/mvp-base.md](docs/integration/mvp-base.md) y [TASK-007](docs/tasks/TASK-007-mvp-base-integration-contract.md).
+- El contrato de autorización por alcance, auditoría y archivos externos está en el PR #37 de mvp-base. La revisión técnica corrigió el aislamiento empresarial y por sucursal del listado de archivos y agregó una regresión; CI run 59 pasó en el cambio de código y run 60 pasó en la cabeza actual `776b25f`. `main` aún no incluye el contrato y queda pendiente la aceptación funcional del propietario. Transporte no debe habilitar escrituras hasta que Base integre el cambio. Estado y detalle en [docs/integration/mvp-base.md](docs/integration/mvp-base.md) y [TASK-007](docs/tasks/TASK-007-mvp-base-integration-contract.md).
 - Los comandos de raíz delegan a mvp-base mientras Transporte todavía no tenga aplicaciones propias.
 
 ## Requisitos

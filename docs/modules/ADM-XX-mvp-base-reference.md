@@ -4,7 +4,7 @@
 
 Identificar las dependencias de plataforma usadas por mvp-transporte. Esta ficha resume las interfaces verificadas; la documentación funcional vigente de cada ADM se mantiene en el repositorio mvp-base.
 
-La tabla de interfaces de esta ficha describe `main` de mvp-base en `52f2e449dcf3a8109481fed55117327f1bd59b38`. El submódulo de la rama actual apunta al candidato `8435ec91e8c8e2370684904afd4bc8df0bda737d`; el PR #37 continúa el trabajo hasta `9331064`, con corrección de alcance y regresión, y aún no está integrado en `main`. La integración de ejecución y el estado de ambas revisiones se documentan en [docs/integration/mvp-base.md](../integration/mvp-base.md).
+La tabla de interfaces de esta ficha describe `main` de mvp-base en `52f2e449dcf3a8109481fed55117327f1bd59b38`. El submódulo de la rama actual apunta al candidato `8435ec91e8c8e2370684904afd4bc8df0bda737d`; el PR #37 contiene la corrección de alcance y la regresión en `9331064`, y la cabeza actual es `776b25f` tras actualizar el seguimiento de la tarea. Aún no está integrado en `main`. La integración de ejecución y el estado de ambas revisiones se documentan en [docs/integration/mvp-base.md](../integration/mvp-base.md).
 
 ## Módulos seleccionados
 
@@ -48,4 +48,4 @@ El candidato `8435ec91` implementa en mvp-base la extensión requerida por TASK-
 - Archivos privados asociados a recursos externos, sujetos a permisos comunes y específicos.
 - Ingreso autenticado de auditoría con actor y alcance derivados de Base.
 
-CI runs 56, 57 y 59 pasaron; el último corresponde a la cabeza `9331064` e incluye la regresión del aislamiento por empresa y sucursal. El PR #37 está listo para revisión independiente; hasta que se fusione a `main` de mvp-base, no habilitar escrituras ni depender de esta interfaz como contrato estable. La [guía candidata de APIs de producto](https://github.com/joseluiszamora/mvp-base/blob/933106429797d5d488279758ca3763c6e43d66da/docs/integration/product-apis.md) contiene los endpoints y esquemas concretos.
+CI runs 56, 57, 59 y 60 pasaron; el cambio de código y la regresión están en `9331064`, y la cabeza actual de documentación `776b25f` también pasó. Queda pendiente la aceptación funcional del propietario; hasta que mvp-base integre el cambio en `main`, no habilitar escrituras ni depender de esta interfaz como contrato estable. La [guía candidata de APIs de producto](https://github.com/joseluiszamora/mvp-base/blob/776b25f264c7ad9ada49598bff7cd35560bb18ab/docs/integration/product-apis.md) contiene los endpoints y esquemas concretos.

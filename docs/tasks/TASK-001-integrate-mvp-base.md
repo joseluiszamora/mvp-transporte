@@ -53,7 +53,7 @@ Inspeccionar ambos repositorios y establecer una integración reproducible que p
 
 ## Pendiente
 
-- Completar la integración de TASK-015 en mvp-base. La revisión técnica corrigió el filtrado por empresa/sucursal y añadió una regresión; CI run 59 pasó en `9331064`. El PR #37 está listo para revisión independiente y fusión a `main`.
+- Completar la integración de TASK-015 en mvp-base. La revisión técnica corrigió el filtrado por empresa/sucursal y añadió una regresión; CI runs 59 y 60 pasaron. El PR #37 está pendiente de aceptación funcional del propietario y fusión a `main`.
 - Después de integrar el contrato en `main` de mvp-base, fijar el commit resultante en el submódulo de Transporte.
 - Crear la API/web de Transporte y extender los scripts de raíz para que cubran su código, sin dejar de ejecutar los checks de mvp-base.
 - Ejecutar instalación limpia y validaciones de los dos proyectos una vez disponible la implementación; no se han ejecutado en esta revisión.
@@ -61,5 +61,5 @@ Inspeccionar ambos repositorios y establecer una integración reproducible que p
 ## Actualización — 2026-11-11
 
 - GitHub confirma que `main` de mvp-base continúa en `52f2e449dcf3a8109481fed55117327f1bd59b38` y que `8435ec91e8c8e2370684904afd4bc8df0bda737d` existe solo en `task/007-transport-integration-contract`.
-- La rama candidata implementa la tarea equivalente TASK-015 y publica la guía de integración de APIs de producto. La revisión técnica detectó y corrigió el filtrado incompleto de archivos externos por empresa/sucursal; `9331064` añade una prueba de regresión y CI run 59 pasó. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) está listo para revisión independiente.
+- La rama candidata implementa la tarea equivalente TASK-015 y publica la guía de integración de APIs de producto. La revisión técnica detectó y corrigió el filtrado incompleto de archivos externos por empresa/sucursal; `9331064` añade una prueba de regresión y CI run 59 pasó. `776b25f` actualiza el estado de revisión y CI run 60 pasó. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) queda pendiente de aceptación funcional del propietario.
 - Se actualizaron las referencias de Transporte para distinguir la interfaz actual de `main` del contrato candidato. La dependencia sigue abierta y Transporte no debe habilitar escrituras todavía.

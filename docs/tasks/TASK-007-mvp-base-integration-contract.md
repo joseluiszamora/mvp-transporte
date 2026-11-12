@@ -2,7 +2,7 @@
 
 **Estado:** En revisión · **Prioridad:** P0 · **Repositorio de implementación:** mvp-base
 
-La implementación candidata está en `mvp-base` TASK-015, rama `task/007-transport-integration-contract`. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) está listo para revisión independiente. La revisión técnica corrigió el aislamiento del listado de archivos por empresa/sucursal y agregó una regresión; CI run 59 pasó en `9331064`. La interfaz de `main` continúa en `52f2e449`; ver [estado de integración](../integration/mvp-base.md).
+La implementación candidata está en `mvp-base` TASK-015, rama `task/007-transport-integration-contract`. La revisión técnica corrigió el aislamiento del listado de archivos por empresa/sucursal y agregó una regresión; CI runs 59 y 60 pasaron en los cambios de código y seguimiento. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) queda pendiente de aceptación funcional del propietario. La interfaz de `main` continúa en `52f2e449`; ver [estado de integración](../integration/mvp-base.md).
 
 ## Objetivo
 
