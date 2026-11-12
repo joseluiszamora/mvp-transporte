@@ -1,8 +1,8 @@
 # TASK-007 — Contrato público de integración para mvp-transporte
 
-**Estado:** En revisión · **Prioridad:** P0 · **Repositorio de implementación:** mvp-base
+**Estado:** Completada · **Prioridad:** P0 · **Repositorio de implementación:** mvp-base
 
-La implementación candidata está en `mvp-base` TASK-015, rama `task/007-transport-integration-contract`. La revisión técnica corrigió el aislamiento del listado de archivos por empresa/sucursal y agregó una regresión; CI runs 59 y 60 pasaron en los cambios de código y seguimiento. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) queda pendiente de aceptación funcional del propietario. La interfaz de `main` continúa en `52f2e449`; ver [estado de integración](../integration/mvp-base.md).
+El propietario aceptó el contrato. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) se fusionó en `main` como `97c5840211e593a9fd91775fe30383a173feeb35`; la revisión corrigió el aislamiento del listado por empresa/sucursal y agregó una regresión. CI runs 59 y 60 pasaron. El submódulo de Transporte queda fijado a ese commit; ver [estado de integración](../integration/mvp-base.md).
 
 ## Objetivo
 

@@ -2,9 +2,9 @@
 
 ## Revisión fijada
 
-El submódulo de esta rama sigue apuntando al commit candidato `8435ec91e8c8e2370684904afd4bc8df0bda737d`, rama `task/007-transport-integration-contract` de `mvp-base`. La cabeza actual del [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) es `776b25f264c7ad9ada49598bff7cd35560bb18ab`; `main` todavía apunta a `52f2e449dcf3a8109481fed55117327f1bd59b38`. La revisión técnica corrigió en `4804ee4` el filtro de empresa y sucursal al listar archivos externos y añadió una prueba de regresión en `9331064`; CI run 59 pasó. CI run 60 también pasó tras actualizar TASK-015. Queda pendiente la aceptación funcional del propietario.
+El submódulo de esta rama queda fijado al commit integrado `97c5840211e593a9fd91775fe30383a173feeb35` de `main` de mvp-base. El [PR #37](https://github.com/joseluiszamora/mvp-base/pull/37) se fusionó después de la aceptación funcional y la revisión técnica.
 
-Por tanto, `8435ec91` sirve como referencia candidata fijada por Transporte, pero no contiene los cambios posteriores de revisión y todavía no es una referencia estable para habilitar el contrato. Después de integrar y validar el PR en mvp-base, se debe actualizar el submódulo al commit resultante de `main` y sincronizar las referencias documentales.
+La revisión corrigió en `4804ee4` el filtro de empresa y sucursal del listado de archivos externos; `9331064` añadió una regresión para otros alcances. CI run 59 pasó con esa corrección y CI run 60 pasó tras actualizar el seguimiento de TASK-015.
 
 ## Límite de ejecución
 
@@ -14,7 +14,7 @@ Cada producto administra su propia base PostgreSQL y su historial de migraciones
 
 La web de Transporte autenticará y renovará sesiones mediante mvp-base. En cada operación de Transporte, el backend deberá validar la sesión y el alcance del actor con una interfaz pública de mvp-base. No deberá verificar localmente el JWT ni confiar en `companyId`, `organizationId`, permisos o identidad enviados en headers o en el cuerpo.
 
-## Capacidades de la revisión actual de `main` (`52f2e449`)
+## Capacidades base verificadas en `52f2e449`
 
 | Capacidad | Interfaz disponible | Límite para Transporte |
 |---|---|---|
@@ -28,22 +28,22 @@ La web de Transporte autenticará y renovará sesiones mediante mvp-base. En cad
 
 La API expone su documento OpenAPI en `/api/v1/openapi.json`. La aplicación y las rutas están compuestas dentro de `mvp-base/apps/api`; el paquete de contratos no proporciona un punto de extensión para montar módulos de Transporte.
 
-## Contrato candidato en PR #37
+## Contrato de producto integrado en `97c5840`
 
-La rama candidata implementa en mvp-base la tarea `TASK-015`, equivalente a TASK-007 de Transporte. Define autenticación de servicio mediante `X-MVP-Integration-Key` y revalidación del usuario con Bearer en cada operación; registro de permisos namespaced; autorización contextual por empresa/sucursal; manejo privado de archivos para recursos externos; y escritura de auditoría con actor y alcance derivados por Base. Base verifica que empresa y sucursal existan en la organización y evalúa el permiso, pero no demuestra que el ID de recurso externo pertenezca a ese alcance. La API de Transporte debe cargar su propio recurso y derivar empresa/sucursal desde su base antes de invocar Base; no debe reenviar como confiables valores del navegador. Los detalles de rutas, payloads, límites y credenciales están en la [guía de APIs de producto de mvp-base](https://github.com/joseluiszamora/mvp-base/blob/776b25f264c7ad9ada49598bff7cd35560bb18ab/docs/integration/product-apis.md) y en [TASK-015](https://github.com/joseluiszamora/mvp-base/blob/776b25f264c7ad9ada49598bff7cd35560bb18ab/docs/tasks/TASK-015.md).
+El PR #37 integró en mvp-base la tarea `TASK-015`, equivalente a TASK-007 de Transporte. El contrato ofrece autenticación de servicio mediante `X-MVP-Integration-Key` y revalidación del usuario con Bearer en cada operación; registro de permisos namespaced; autorización contextual por empresa/sucursal; manejo privado de archivos para recursos externos; y escritura de auditoría con actor y alcance derivados por Base. Base verifica que empresa y sucursal existan en la organización y evalúa el permiso, pero no demuestra que el ID de recurso externo pertenezca a ese alcance. La API de Transporte debe cargar su propio recurso y derivar empresa/sucursal desde su base antes de invocar Base; no debe confiar en valores del navegador. Los detalles están en la [guía de APIs de producto de mvp-base](https://github.com/joseluiszamora/mvp-base/blob/97c5840211e593a9fd91775fe30383a173feeb35/docs/integration/product-apis.md) y en [TASK-015](https://github.com/joseluiszamora/mvp-base/blob/97c5840211e593a9fd91775fe30383a173feeb35/docs/tasks/TASK-015.md).
 
-CI runs 56, 57, 59 y 60 pasaron; el cambio de código y la regresión están en `9331064`, y la cabeza actual de documentación `776b25f` también pasó. Transporte no debe tratar esta revisión como contrato estable hasta que el propietario acepte el contrato y mvp-base lo integre en `main`.
+CI runs 56, 57, 59 y 60 pasaron. El propietario aceptó el contrato y mvp-base lo integró en `main` mediante `97c5840`.
 
 ## Requisitos antes de habilitar datos de transporte
 
-TASK-007 especifica el contrato necesario. La rama candidata `8435ec91` implementa estos requisitos en mvp-base como TASK-015; deben quedar validados e integrados en `main` antes de habilitar operaciones de escritura:
+El contrato está integrado en Base. Al implementar operaciones de Transporte, la API deberá:
 
 1. Validar un token en curso y devolver contexto confiable de usuario, organización y membresía, junto con permisos y alcances por empresa/sucursal para códigos registrados por el producto de transporte. La revocación o suspensión de sesión/membresía debe reflejarse en esa validación.
 2. Permitir registrar permisos `transport.*` mediante una extensión pública y mantener su administración dentro del módulo común de permisos.
 3. Autorizar y asociar archivos a recursos de Transporte, incluidos vehículos, y conservar la protección de descarga y el aislamiento empresarial.
 4. Aceptar eventos de auditoría de Transporte mediante un contrato autenticado que establezca actor, organización, recurso, acción y validación de alcance.
 
-Hasta que el contrato candidato esté validado e integrado en `main` de mvp-base, no se deben exponer endpoints de escritura de Transporte ni llamar a código interno de mvp-base para sortear la frontera. Los módulos independientes pueden seguir avanzando en especificación.
+La integración con Base ya está lista, pero mvp-transporte todavía no tiene API propia. Sus futuras escrituras deben usar este contrato público y no importar código interno ni consultar las tablas de mvp-base.
 
 ## Instalación y migraciones
 

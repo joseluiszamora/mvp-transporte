@@ -23,11 +23,11 @@ Consumir paquetes versionados si mvp-base ya ofrece módulos importables. Mientr
 - Para actualizar la referencia, revisar primero el nuevo commit de `main` en mvp-base; luego ejecutar `git -C mvp-base fetch origin main`, `git -C mvp-base checkout <commit-revisado>` y `git add mvp-base` desde la raíz de mvp-transporte. El cambio queda registrado como una nueva referencia del submódulo en el commit de mvp-transporte.
 - Esta decisión fija el código fuente, pero no conecta todavía la API, los contratos de ejecución ni las migraciones de base de datos. Esos contratos deben verificarse antes de implementar módulos de transporte.
 
-### Estado de la referencia candidata — 2026-11-11
+### Integración del contrato de producto — 2026-11-11
 
-- La rama actual de mvp-transporte fija el submódulo en `8435ec91e8c8e2370684904afd4bc8df0bda737d`, rama `task/007-transport-integration-contract` de mvp-base. Ese commit implementa TASK-015, equivalente a TASK-007 de Transporte.
-- `main` de mvp-base aún apunta a `52f2e449dcf3a8109481fed55117327f1bd59b38`. El PR [#37](https://github.com/joseluiszamora/mvp-base/pull/37) continúa abierto; su cabeza actual es `776b25f`. La revisión técnica detectó y corrigió en `4804ee4` un listado de archivos que no filtraba por empresa y sucursal; `9331064` agrega la prueba de regresión y CI run 59 pasó. CI run 60 también pasó tras actualizar TASK-015. Queda pendiente la aceptación funcional del propietario. El submódulo de Transporte se mantiene en `8435ec9` hasta que Base integre el PR.
-- El pin actual se considera candidato de revisión. Antes de integrar este cambio en `main` de mvp-transporte, mvp-base debe completar la validación e integrar el contrato en su rama principal; luego se actualizará el gitlink al commit integrado y se volverán a sincronizar las referencias documentales.
+- El propietario aceptó funcionalmente el contrato TASK-015, equivalente a TASK-007 de Transporte. El PR [#37](https://github.com/joseluiszamora/mvp-base/pull/37) se fusionó en `main` de mvp-base como `97c5840211e593a9fd91775fe30383a173feeb35`.
+- La revisión corrigió en `4804ee4` el listado de archivos que no filtraba por empresa y sucursal; `9331064` añadió la regresión. CI runs 59 y 60 pasaron. El submódulo de Transporte se actualiza a `97c5840` en esta rama.
+- La integración sigue por HTTP entre APIs y bases separadas. Transporte no importa fuentes privadas ni consulta las tablas de mvp-base; su API propia todavía está pendiente.
 
 ## ADR-003 — Arquitectura modular
 
