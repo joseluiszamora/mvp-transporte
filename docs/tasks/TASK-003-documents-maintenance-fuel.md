@@ -11,6 +11,7 @@ Dar seguimiento documental, preventivo/correctivo y de cargas de combustible a l
 ## Prerrequisitos
 
 - TASK-002 completada.
+- TASK-007 integrada en mvp-base, con asociación protegida de archivos a vehículos y comprobantes.
 - Contrato de archivos y permisos de mvp-base identificado.
 
 ## Alcance
