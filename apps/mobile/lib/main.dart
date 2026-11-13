@@ -289,7 +289,7 @@ class OrganizationScreen extends StatefulWidget {
   });
 
   final DriverSession session;
-  final ValueChanged<String> onSelect;
+  final Future<void> Function(String) onSelect;
   final String? error;
 
   @override
@@ -298,6 +298,7 @@ class OrganizationScreen extends StatefulWidget {
 
 class _OrganizationScreenState extends State<OrganizationScreen> {
   String? _selectedId;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -305,6 +306,18 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
     _selectedId = widget.session.organizations.isEmpty
         ? null
         : widget.session.organizations.first.id;
+  }
+
+  Future<void> _continue() async {
+    final organizationId = _selectedId;
+    if (organizationId == null || _busy) return;
+
+    setState(() => _busy = true);
+    try {
+      await widget.onSelect(organizationId);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -335,7 +348,9 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: (value) => setState(() => _selectedId = value),
+                onChanged: _busy
+                    ? null
+                    : (value) => setState(() => _selectedId = value),
                 decoration: const InputDecoration(
                   labelText: 'Organización',
                   border: OutlineInputBorder(),
@@ -350,10 +365,21 @@ class _OrganizationScreenState extends State<OrganizationScreen> {
             ],
             const SizedBox(height: 18),
             FilledButton(
-              onPressed: _selectedId == null
-                  ? null
-                  : () => widget.onSelect(_selectedId!),
-              child: const Text('Continuar'),
+              onPressed: _selectedId == null || _busy ? null : _continue,
+              child: _busy
+                  ? const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Continuando...'),
+                      ],
+                    )
+                  : const Text('Continuar'),
             ),
           ],
         ),
