@@ -14,7 +14,7 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 | 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | En curso |
 | 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | En curso |
 | 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | En curso |
-| 4 | App móvil para conductor | API de viajes estable | M4 - Operación móvil | Pendiente |
+| 4 | App móvil para conductor | API de viajes estable y contrato seguro usuario-empleado en mvp-base | M4 - Operación móvil | Bloqueado |
 | 5 | Integración y versión inicial | Fases 1–4 y revisión de permisos | M5 - Versión inicial | Pendiente |
 
 ## Fase 0 — Base

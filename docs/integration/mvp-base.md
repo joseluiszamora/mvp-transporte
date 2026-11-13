@@ -14,6 +14,8 @@ Configura una credencial aleatoria de al menos 32 caracteres como servicio `tran
 
 La web inicia sesión contra `/api/v1/auth/login` de mvp-base y recibe un access token, la organización seleccionada y un token CSRF. Conserva el access token solo en memoria; el refresh token permanece en la cookie HttpOnly de Base. La web conserva el valor CSRF en `sessionStorage` para renovar la sesión al recargar la página y envía `credentials: include` en las llamadas de autenticación. El cierre de sesión llama a `/api/v1/auth/logout` de Base.
 
+La app Flutter de conductor aún no está habilitada. El contrato vigente de `/auth/me` no informa el Employee asociado al usuario autenticado y no hay una operación pública de mvp-base para consultar solo esa relación. La app no debe enviar su propio `employeeId` ni recibir acceso amplio a `users.read` para inferirlo. TASK-005 requiere una operación de autoservicio autorizada por empresa y un origen móvil registrado antes de implementar consultas de viajes propios.
+
 ## Operaciones usadas
 
 | Uso | Contrato público de mvp-base | Comportamiento de Transporte |
