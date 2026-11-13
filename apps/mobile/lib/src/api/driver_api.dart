@@ -6,22 +6,46 @@ class DriverApi {
 
   final BaseAuthClient _auth;
 
-  Future<List<DriverTrip>> listTrips() async {
+  Future<DriverTripPage> listTrips({
+    required int limit,
+    required int offset,
+  }) async {
     final response = await _auth.transportGet(
-      'driver/trips?limit=100&offset=0',
+      'driver/trips?limit=$limit&offset=$offset',
     );
     final items = response['items'];
-    if (items is! List)
+    final total = response['total'];
+    final pageLimit = response['limit'];
+    final pageOffset = response['offset'];
+    if (items is! List ||
+        total is! int ||
+        pageLimit is! int ||
+        pageOffset is! int ||
+        total < 0 ||
+        pageLimit != limit ||
+        pageOffset != offset) {
       throw const ApiException(
         502,
         'INVALID_RESPONSE',
         'La lista de viajes no es válida.',
       );
-    return items
-        .map(
-          (item) => DriverTrip.fromJson(Map<String, dynamic>.from(item as Map)),
-        )
-        .toList();
+    }
+    final trips = items.map((item) {
+      if (item is! Map) {
+        throw const ApiException(
+          502,
+          'INVALID_RESPONSE',
+          'La lista de viajes no es válida.',
+        );
+      }
+      return DriverTrip.fromJson(Map<String, dynamic>.from(item));
+    }).toList();
+    return DriverTripPage(
+      items: trips,
+      total: total,
+      limit: pageLimit,
+      offset: pageOffset,
+    );
   }
 
   Future<DriverTrip> getTrip(String tripId) async {
@@ -49,4 +73,22 @@ class DriverApi {
       );
     return DriverTrip.fromJson(Map<String, dynamic>.from(item));
   }
+}
+
+class DriverTripPage {
+  const DriverTripPage({
+    required this.items,
+    required this.total,
+    required this.limit,
+    required this.offset,
+  });
+
+  final List<DriverTrip> items;
+  final int total;
+  final int limit;
+  final int offset;
+
+  int get nextOffset => offset + items.length;
+
+  bool get hasMore => items.isNotEmpty && nextOffset < total;
 }

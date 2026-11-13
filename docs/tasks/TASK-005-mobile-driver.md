@@ -26,6 +26,7 @@ Permitir que el conductor consulte sus viajes y actualice su estado desde Flutte
 ## Criterios de aceptación
 
 - El conductor solo consulta viajes asignados a él dentro de la empresa activa.
+- La lista móvil pagina con `limit`/`offset` y permite cargar más viajes sin enviar IDs de empresa o empleado.
 - La app permite solo iniciar un viaje asignado (`ASSIGNED` → `IN_PROGRESS`) y completarlo (`IN_PROGRESS` → `COMPLETED`); las fechas y el actor vienen del servidor.
 - El refresh token y CSRF quedan en almacenamiento seguro del dispositivo; el access token vive en memoria.
 - La app usa la API; no accede directamente a PostgreSQL.
@@ -36,7 +37,7 @@ El propietario autorizó añadir en mvp-base una consulta propia. `GET /api/v1/e
 
 La API de Transporte consume este contrato en servidor, deriva el perfil operativo propio de la empresa y filtra viajes por una asignación activa al conductor. La app nunca envía una identidad de empleado como evidencia. Cada operación requiere además `transport.driver_trips.read` o `transport.driver_trips.transition`; iniciar y completar requiere también `transport.audit.write` para la auditoría común.
 
-La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. `flutter pub get` generó el lockfile y `flutter analyze` terminó sin incidencias. La compilación APK Android queda pospuesta por indicación del propietario; iOS requiere macOS con Xcode. Restan el recorrido funcional y la validación en dispositivos.
+La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista paginada, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. `flutter pub get` generó el lockfile y `flutter analyze` terminó sin incidencias. La compilación APK Android queda pospuesta por indicación del propietario; iOS requiere macOS con Xcode. Restan el recorrido funcional y la validación en dispositivos.
 
 El 2026-11-13, el propietario indicó posponer la compilación APK Android. Durante la revisión del flujo de autenticación se ajustó el callback de login para esperar la selección automática de organización y presentar sus errores en la pantalla de acceso. Una respuesta `401` persistente tras renovar la sesión elimina los tokens locales y devuelve la app al login.
 

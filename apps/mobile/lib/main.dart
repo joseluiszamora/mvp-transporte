@@ -381,9 +381,16 @@ class DriverHomeScreen extends StatefulWidget {
 }
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
+  static const _tripPageSize = 20;
+
   List<DriverTrip> _trips = [];
+  int _nextOffset = 0;
+  bool _hasMore = false;
+  bool _loadingMore = false;
   bool _loading = true;
   String? _error;
+  String? _loadMoreError;
+  int _tripQueryGeneration = 0;
 
   @override
   void initState() {
@@ -392,20 +399,73 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Future<void> _loadTrips() async {
+    final generation = ++_tripQueryGeneration;
     setState(() {
       _loading = true;
+      _loadingMore = false;
       _error = null;
+      _loadMoreError = null;
+      _trips = [];
+      _nextOffset = 0;
+      _hasMore = false;
     });
     try {
-      _trips = await widget.api.listTrips();
+      final page = await widget.api.listTrips(limit: _tripPageSize, offset: 0);
+      if (mounted && generation == _tripQueryGeneration) {
+        setState(() {
+          _trips = page.items;
+          _nextOffset = page.nextOffset;
+          _hasMore = page.hasMore;
+        });
+      }
     } catch (error) {
+      if (!mounted || generation != _tripQueryGeneration) return;
       if (_isSessionExpired(error)) {
         widget.onSessionExpired();
       } else {
         _error = error.toString();
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _tripQueryGeneration) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _loadMoreTrips() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    final generation = _tripQueryGeneration;
+    setState(() {
+      _loadingMore = true;
+      _loadMoreError = null;
+    });
+    try {
+      final page = await widget.api.listTrips(
+        limit: _tripPageSize,
+        offset: _nextOffset,
+      );
+      if (mounted && generation == _tripQueryGeneration) {
+        final knownIds = _trips.map((trip) => trip.id).toSet();
+        setState(() {
+          _trips = [
+            ..._trips,
+            ...page.items.where((trip) => knownIds.add(trip.id)),
+          ];
+          _nextOffset = page.nextOffset;
+          _hasMore = page.hasMore;
+        });
+      }
+    } catch (error) {
+      if (!mounted || generation != _tripQueryGeneration) return;
+      if (_isSessionExpired(error)) {
+        widget.onSessionExpired();
+      } else if (mounted) {
+        setState(() => _loadMoreError = error.toString());
+      }
+    } finally {
+      if (mounted && generation == _tripQueryGeneration) {
+        setState(() => _loadingMore = false);
+      }
     }
   }
 
@@ -468,12 +528,46 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               )
             : ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: _trips.length,
+                itemCount:
+                    _trips.length +
+                    (_hasMore || _loadMoreError != null ? 1 : 0),
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, index) => _TripCard(
-                  trip: _trips[index],
-                  onTap: () => _openTrip(_trips[index]),
-                ),
+                itemBuilder: (context, index) {
+                  if (index < _trips.length) {
+                    final trip = _trips[index];
+                    return _TripCard(trip: trip, onTap: () => _openTrip(trip));
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Column(
+                      children: [
+                        if (_loadMoreError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _loadMoreError!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        if (_loadingMore)
+                          const CircularProgressIndicator()
+                        else
+                          OutlinedButton.icon(
+                            onPressed: _loadMoreTrips,
+                            icon: const Icon(Icons.expand_more),
+                            label: Text(
+                              _loadMoreError == null
+                                  ? 'Cargar más viajes'
+                                  : 'Reintentar',
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
               ),
       ),
     );
