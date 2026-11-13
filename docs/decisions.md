@@ -93,3 +93,11 @@ mvp-transporte y mvp-base se ejecutan como aplicaciones independientes y se inte
 La decisión mantiene repositorios, despliegues y migraciones independientes, como permite la estructura real de mvp-base, y evita una historia Prisma duplicada o una segunda implementación de las reglas de plataforma. Un endpoint de Transporte solo puede autorizarse cuando mvp-base valide la sesión del actor y su permiso en el alcance objetivo. Los IDs del cliente no son evidencia de autorización.
 
 El contrato de producto de mvp-base, integrado en el commit `97c5840211e593a9fd91775fe30383a173feeb35`, permite validar permisos `transport.*` por empresa/sucursal, guardar archivos externos y escribir auditoría. TASK-007 quedó completada. La API de Transporte debe llamar a estos endpoints públicos y derivar el alcance de sus propios recursos antes de autorizar operaciones.
+
+## ADR-012 — Identidad propia del conductor
+
+**Estado:** Aprobada · **Fecha:** 2026-11-12
+
+La API de Transporte resuelve el empleado móvil con `GET /api/v1/employees/me` de mvp-base usando el Bearer autenticado. La app no manda `employeeId`, `companyId` ni `organizationId` como identidad. Base devuelve únicamente IDs de su relación activa en la organización seleccionada; Transporte comprueba que exista un perfil de conductor activo y filtra viajes por asignaciones activas a ese empleado.
+
+La app exige `transport.driver_trips.read` para listar/detallar y `transport.driver_trips.transition` para iniciar/completar. Los cambios registran el usuario actor y marcas de tiempo del servidor y requieren `transport.audit.write`. El dispositivo guarda refresh y CSRF en almacenamiento seguro; el access token queda en memoria. Esta decisión no concede permiso de transporte por el mero hecho de vincular una cuenta de Base.

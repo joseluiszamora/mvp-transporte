@@ -25,13 +25,35 @@ export type TripCommand = Omit<TripCreateInput, "plannedStartAt" | "plannedEndAt
 };
 type CrewEntry = { role: string; source: string; employeeId: string | null; startsAt: Date; endsAt: Date; isActive: boolean };
 
+export interface DriverTripItem {
+  id: string;
+  type: TripType;
+  status: TripStatus;
+  vehiclePlate: string;
+  origin: string;
+  destination: string;
+  stops: string[];
+  sealNumbers: string[];
+  plannedStartAt: string;
+  plannedEndAt: string;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
+  driverAssignments: Array<{ startsAt: string; endsAt: string }>;
+}
+
 const tripInclude = {
   stops: { orderBy: { position: "asc" as const } },
   crew: { orderBy: [{ startsAt: "asc" as const }, { createdAt: "asc" as const }] },
   events: { orderBy: { createdAt: "asc" as const } },
 } satisfies Prisma.TripInclude;
 
+const driverTripInclude = {
+  stops: { orderBy: { position: "asc" as const } },
+  crew: { where: { role: "DRIVER" as const, source: "INTERNAL" as const, isActive: true }, orderBy: [{ startsAt: "asc" as const }, { createdAt: "asc" as const }] },
+} satisfies Prisma.TripInclude;
+
 type TripWithDetails = Prisma.TripGetPayload<{ include: typeof tripInclude }>;
+type DriverTripWithDetails = Prisma.TripGetPayload<{ include: typeof driverTripInclude }>;
 
 function scopeWhere(target: AuthorizedTarget) {
   return {
@@ -94,6 +116,33 @@ function mapTrip(row: TripWithDetails, vehiclePlate: string): TripItem {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+function mapDriverTrip(row: DriverTripWithDetails, vehiclePlate: string, employeeId: string): DriverTripItem {
+  const driverAssignments = row.crew.filter((assignment) => assignment.employeeId === employeeId).map((assignment) => ({
+    startsAt: assignment.startsAt.toISOString(), endsAt: assignment.endsAt.toISOString(),
+  }));
+  if (driverAssignments.length === 0) throw new ApiError(404, "TRIP_NOT_FOUND", "El viaje no está disponible.");
+  return {
+    id: row.id, type: row.type, status: row.status, vehiclePlate, origin: row.origin, destination: row.destination,
+    stops: row.stops.map((stop) => stop.location), sealNumbers: row.sealNumbers,
+    plannedStartAt: row.plannedStartAt.toISOString(), plannedEndAt: row.plannedEndAt.toISOString(),
+    actualStartAt: row.actualStartAt?.toISOString() ?? null, actualEndAt: row.actualEndAt?.toISOString() ?? null,
+    driverAssignments,
+  };
+}
+
+function driverTripWhere(target: AuthorizedTarget, employeeId: string): Prisma.TripWhereInput {
+  return {
+    ...scopeWhere(target),
+    crew: { some: { employeeId, role: "DRIVER", source: "INTERNAL", isActive: true } },
+  };
+}
+
+function requireActiveDriverAssignment(trip: TripWithDetails, employeeId: string): void {
+  if (!trip.crew.some((assignment) => assignment.isActive && assignment.role === "DRIVER" && assignment.source === "INTERNAL" && assignment.employeeId === employeeId)) {
+    throw new ApiError(404, "TRIP_NOT_FOUND", "El viaje no está disponible.");
+  }
 }
 
 function requireVehiclePlate(vehiclePlates: Map<string, string>, vehicleId: string): string {
@@ -354,6 +403,34 @@ export async function listTrips(
   return { items: items.map((trip) => mapTrip(trip, requireVehiclePlate(vehiclePlates, trip.vehicleId))), total, limit: input.limit, offset: input.offset };
 }
 
+export async function listDriverTrips(
+  database: PrismaClient,
+  target: AuthorizedTarget,
+  employeeId: string,
+  input: { limit: number; offset: number; status?: TripStatus },
+): Promise<PageResponse<DriverTripItem>> {
+  const where: Prisma.TripWhereInput = {
+    ...driverTripWhere(target, employeeId),
+    ...(input.status ? { status: input.status } : {}),
+  };
+  const [rows, total] = await Promise.all([
+    database.trip.findMany({ where, include: driverTripInclude, orderBy: [{ plannedStartAt: "desc" }, { id: "desc" }], take: input.limit, skip: input.offset }),
+    database.trip.count({ where }),
+  ]);
+  const vehiclePlates = await getVehiclePlates(database, target, rows.map((trip) => trip.vehicleId));
+  return {
+    items: rows.map((trip) => mapDriverTrip(trip, requireVehiclePlate(vehiclePlates, trip.vehicleId), employeeId)),
+    total, limit: input.limit, offset: input.offset,
+  };
+}
+
+export async function getDriverTrip(database: PrismaClient, target: AuthorizedTarget, employeeId: string, tripId: string): Promise<DriverTripItem> {
+  const trip = await database.trip.findFirst({ where: { id: tripId, ...driverTripWhere(target, employeeId) }, include: driverTripInclude });
+  if (!trip) throw new ApiError(404, "TRIP_NOT_FOUND", "El viaje no está disponible.");
+  const vehiclePlates = await getVehiclePlates(database, target, [trip.vehicleId]);
+  return mapDriverTrip(trip, requireVehiclePlate(vehiclePlates, trip.vehicleId), employeeId);
+}
+
 export async function getTrip(database: PrismaClient, target: AuthorizedTarget, id: string): Promise<TripItem> {
   const trip = await database.trip.findFirst({ where: { id, ...scopeWhere(target) }, include: tripInclude });
   if (!trip) throw new ApiError(404, "TRIP_NOT_FOUND", "El viaje no está disponible.");
@@ -510,10 +587,15 @@ export async function transitionTrip(
   target: AuthorizedTarget,
   tripId: string,
   input: { status: Exclude<TripStatus, "PLANNED">; cancellationReason?: string },
+  driverEmployeeId?: string,
 ): Promise<TripItem> {
   const initial = await loadTripForWrite(database, tripId);
   if (initial.organizationId !== target.organizationId || initial.companyId !== target.companyId || (target.branchId && initial.branchId !== target.branchId)) {
     throw new ApiError(404, "TRIP_NOT_FOUND", "El viaje no está disponible.");
+  }
+  if (driverEmployeeId) {
+    if (input.status !== "IN_PROGRESS" && input.status !== "COMPLETED") throw new ApiError(403, "DRIVER_TRANSITION_FORBIDDEN", "El conductor solo puede iniciar o completar su viaje.");
+    requireActiveDriverAssignment(initial, driverEmployeeId);
   }
   const allowed: Record<TripStatus, TripStatus[]> = {
     PLANNED: ["ASSIGNED", "CANCELLED"], ASSIGNED: ["IN_PROGRESS", "CANCELLED"],
@@ -522,15 +604,17 @@ export async function transitionTrip(
   if (!allowed[initial.status].includes(input.status)) throw new ApiError(409, "INVALID_TRIP_TRANSITION", "El viaje no admite ese cambio de estado.");
   if (input.status === "CANCELLED" && !input.cancellationReason?.trim()) throw new ApiError(400, "CANCELLATION_REASON_REQUIRED", "Indica el motivo de cancelación.");
   if (input.status === "ASSIGNED" || input.status === "IN_PROGRESS") {
-    const commandCrew = initial.crew.filter((person) => person.isActive).map((person) => ({
-      role: person.role,
-      source: person.source,
-      ...(person.employeeId ? { employeeId: person.employeeId } : {}),
-      ...(person.externalName ? { externalName: person.externalName } : {}),
-      startsAt: person.startsAt,
-      endsAt: person.endsAt,
-    }));
-    await validateAssignmentInputs(database, base, bearer, target, initial, commandCrew);
+    if (!driverEmployeeId) {
+      const commandCrew = initial.crew.filter((person) => person.isActive).map((person) => ({
+        role: person.role,
+        source: person.source,
+        ...(person.employeeId ? { employeeId: person.employeeId } : {}),
+        ...(person.externalName ? { externalName: person.externalName } : {}),
+        startsAt: person.startsAt,
+        endsAt: person.endsAt,
+      }));
+      await validateAssignmentInputs(database, base, bearer, target, initial, commandCrew);
+    }
     await getAssignableVehicle(database, target, initial.vehicleId);
   }
 
@@ -539,6 +623,7 @@ export async function transitionTrip(
     const current = await transaction.trip.findUniqueOrThrow({ where: { id: tripId }, include: tripInclude });
     if (!allowed[current.status].includes(input.status)) throw new ApiError(409, "INVALID_TRIP_TRANSITION", "El viaje cambió y ya no admite ese estado.");
     const activeCrew = current.crew.filter((person) => person.isActive);
+    if (driverEmployeeId) requireActiveDriverAssignment(current, driverEmployeeId);
     await lockResources(transaction, [current.vehicleId], internalEmployeeIds(activeCrew));
     if (input.status === "ASSIGNED" || input.status === "IN_PROGRESS") {
       await assertAssignable(transaction, target, current, activeCrew);

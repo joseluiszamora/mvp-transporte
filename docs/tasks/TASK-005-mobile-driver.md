@@ -1,6 +1,6 @@
 # TASK-005 — Consulta móvil del conductor
 
-**Estado:** Bloqueado
+**Estado:** En curso
 **Prioridad:** P2  
 **Milestone:** M4 - Operación móvil
 
@@ -17,27 +17,31 @@ Permitir que el conductor consulte sus viajes y actualice su estado desde Flutte
 ## Alcance
 
 - Inicio de sesión con el mecanismo compartido.
+- Selección de organización desde las opciones devueltas por mvp-base.
 - Lista y detalle de viajes del conductor autenticado.
 - Actualización permitida del estado e inicio/fin.
 - Manejo claro de errores y confirmación de guardado.
+- Almacenamiento seguro del refresh token y CSRF; access token solo en memoria.
 
 ## Criterios de aceptación
 
 - El conductor solo consulta viajes asignados a él dentro de la empresa activa.
-- Las actualizaciones quedan registradas con fecha y actor.
+- La app permite solo iniciar un viaje asignado (`ASSIGNED` → `IN_PROGRESS`) y completarlo (`IN_PROGRESS` → `COMPLETED`); las fechas y el actor vienen del servidor.
+- El refresh token y CSRF quedan en almacenamiento seguro del dispositivo; el access token vive en memoria.
 - La app usa la API; no accede directamente a PostgreSQL.
 
-## Bloqueo de integración detectado — 2026-11-12
+## Dependencia de identidad resuelta en desarrollo — 2026-11-12
 
-La sesión actual de mvp-base identifica al usuario y la organización, pero no devuelve el empleado asociado. `GET /employees/{employeeId}` necesita que el cliente ya conozca el ID; el campo `linkedUser` requiere permisos de lectura personal y de usuarios, y el propio mvp-base aclara que vincular la cuenta no concede acceso a la aplicación. El contrato de integración `transport/authorize` devuelve el actor, pero no su relación con Employee.
+El propietario autorizó añadir en mvp-base una consulta propia. `GET /api/v1/employees/me` quedó implementado y validado en la rama `task/016-employee-self-context`, commit local `928d535`; devuelve solo IDs de empleado, organización y empresa activos desde el Bearer autenticado, sin recibir `employeeId` ni exigir permisos generales de lectura. No requiere migración. El commit aún no está publicado ni integrado en la rama principal de mvp-base.
 
-Transporte no aceptará un `employeeId` enviado por la app como identidad, ni consultará directamente la base de mvp-base. Hace falta que mvp-base exponga una operación pública de autoservicio que, dado el Bearer autenticado y una empresa autorizada, devuelva únicamente el empleado activo asociado a ese usuario (o un error si no existe una única relación). Con ese dato, Transporte podrá filtrar viajes y autorizar transiciones desde sus propias tablas.
+La API de Transporte consume este contrato en servidor, deriva el perfil operativo propio de la empresa y filtra viajes por una asignación activa al conductor. La app nunca envía una identidad de empleado como evidencia. Cada operación requiere además `transport.driver_trips.read` o `transport.driver_trips.transition`; iniciar y completar requiere también `transport.audit.write` para la auditoría común.
 
-La autenticación móvil también debe usar un origen registrado en mvp-base y guardar los tokens rotativos en almacenamiento seguro del dispositivo. Una vez acordado y autorizado ese contrato de identidad, se implementarán el endpoint de conductor en Transporte y la app Flutter.
+La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints y el source Flutter de sesión, lista, detalle y transiciones están implementados. El SDK no pudo generar las carpetas nativas Android/iOS ni resolver paquetes en este entorno; también queda pendiente la integración/aceptación de TASK-016 en mvp-base.
 
 ## Próximos pasos
 
-1. Acordar e implementar en mvp-base la consulta de empleado propio con autorización de empresa.
-2. Registrar permisos móviles específicos y endpoints de viajes propios en Transporte, con auditoría compartida.
-3. Crear `apps/mobile` en Flutter para sesión, lista, detalle y transiciones permitidas.
-4. Actualizar los documentos de integración y la guía de ejecución móvil.
+1. Revisar y publicar/integrar TASK-016 de mvp-base según su flujo aprobado.
+2. Terminar de revisar y validar los endpoints propios de conductor en Transporte.
+3. Generar los proyectos nativos Android/iOS y resolver las dependencias Flutter.
+4. Hacer el recorrido manual de login, selección de organización, viajes y transiciones.
+5. Documentar el manejo móvil de sesión y la guía de ejecución.

@@ -29,6 +29,8 @@ const permissionDefinitions = [
   { code: "transport.trips.create", description: "Planificar viajes" },
   { code: "transport.trips.assign", description: "Asignar y cambiar recursos de un viaje" },
   { code: "transport.trips.transition", description: "Cambiar el estado operativo de un viaje" },
+  { code: "transport.driver_trips.read", description: "Consultar únicamente viajes propios como conductor" },
+  { code: "transport.driver_trips.transition", description: "Iniciar y completar viajes propios como conductor" },
   { code: "transport.audit.write", description: "Registrar cambios de transporte en auditoría" },
 ];
 const fileResources = [
@@ -66,6 +68,12 @@ export interface EmployeeDetails {
   firstNames: string;
   lastNames: string;
   status: "ACTIVE" | "INACTIVE";
+}
+
+export interface CurrentEmployeeContext {
+  employeeId: string;
+  organizationId: string;
+  companyId: string;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -155,6 +163,17 @@ export class BaseIntegrationClient {
       branchId: branchId ?? null,
       permissionCode,
     };
+  }
+
+  async getCurrentEmployee(bearer: string): Promise<CurrentEmployeeContext> {
+    const result = await this.send<unknown>("/employees/me", { bearer });
+    const item = asRecord(asRecord(result)?.item);
+    if (!item || typeof item.employeeId !== "string" || !uuidPattern.test(item.employeeId) ||
+      typeof item.organizationId !== "string" || !uuidPattern.test(item.organizationId) ||
+      typeof item.companyId !== "string" || !uuidPattern.test(item.companyId)) {
+      throw new ApiError(502, "BASE_INVALID_RESPONSE", "mvp-base devolvió una identidad de empleado no válida.");
+    }
+    return { employeeId: item.employeeId, organizationId: item.organizationId, companyId: item.companyId };
   }
 
   async getEmployee(bearer: string, employeeId: string, expectedCompanyId?: string): Promise<EmployeeDetails> {

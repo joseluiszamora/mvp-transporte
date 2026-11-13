@@ -5,6 +5,7 @@ import helmet from "helmet";
 import type { PrismaClient } from "./prisma/generated/client.ts";
 import { createErrorHandler, ApiError } from "./errors.ts";
 import type { BaseIntegrationClient } from "./modules/integrations/base-client.ts";
+import { createDriverRouter } from "./modules/driver/driver-router.ts";
 import { createOperationalStaffRouter } from "./modules/operational-staff/staff-router.ts";
 import { createResourcesRouter } from "./modules/resources/resources-router.ts";
 import { createTripsRouter } from "./modules/trips/trips-router.ts";
@@ -70,6 +71,7 @@ export function createApplication(database: PrismaClient, base: BaseIntegrationC
     }
   });
   api.use("/vehicles", createVehiclesRouter(database, base));
+  api.use("/driver", createDriverRouter(database, base));
   api.use("/operational-staff", createOperationalStaffRouter(database, base));
   api.use("/trips", createTripsRouter(database, base));
   api.use("/", createResourcesRouter(database, base));
@@ -97,6 +99,9 @@ const openApiDocument = {
     schemas: {
       ApiError: { type: "object", required: ["error"], properties: { error: { type: "object", required: ["code", "message", "requestId"] } } },
       Vehicle: { type: "object", properties: { id: { type: "string", format: "uuid" }, plate: { type: "string" }, capacityKg: { type: "number", exclusiveMinimum: 0 }, odometerKm: { type: ["integer", "null"], minimum: 0 }, status: { type: "string", enum: ["ACTIVE", "INACTIVE"] } } },
+      DriverTrip: { type: "object", additionalProperties: false, required: ["id", "type", "status", "vehiclePlate", "origin", "destination", "stops", "sealNumbers", "plannedStartAt", "plannedEndAt", "actualStartAt", "actualEndAt", "driverAssignments"], properties: { id: { type: "string", format: "uuid" }, type: { type: "string", enum: ["DISTRIBUTION", "SHORT_ROUTE", "LONG_DISTANCE"] }, status: { type: "string", enum: ["PLANNED", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] }, vehiclePlate: { type: "string" }, origin: { type: "string" }, destination: { type: "string" }, stops: { type: "array", items: { type: "string" } }, sealNumbers: { type: "array", items: { type: "string" } }, plannedStartAt: { type: "string", format: "date-time" }, plannedEndAt: { type: "string", format: "date-time" }, actualStartAt: { type: ["string", "null"], format: "date-time" }, actualEndAt: { type: ["string", "null"], format: "date-time" }, driverAssignments: { type: "array", items: { type: "object", additionalProperties: false, required: ["startsAt", "endsAt"], properties: { startsAt: { type: "string", format: "date-time" }, endsAt: { type: "string", format: "date-time" } } } } } },
+      PageOfDriverTrips: { type: "object", additionalProperties: false, required: ["items", "total", "limit", "offset"], properties: { items: { type: "array", items: { $ref: "#/components/schemas/DriverTrip" } }, total: { type: "integer" }, limit: { type: "integer" }, offset: { type: "integer" } } },
+      DriverTripResponse: { type: "object", additionalProperties: false, required: ["item"], properties: { item: { $ref: "#/components/schemas/DriverTrip" } } },
     },
   },
   paths: {
@@ -104,6 +109,9 @@ const openApiDocument = {
     "/ready": { get: { security: [], summary: "Comprobar conexión de base de datos", responses: { "200": { description: "API lista" } } } },
     "/companies": { get: { summary: "Listar empresas visibles en mvp-base", responses: { "200": { description: "Empresas" } } } },
     "/branches": { get: { summary: "Listar sucursales visibles en mvp-base", responses: { "200": { description: "Sucursales" } } } },
+    "/driver/trips": { get: { summary: "Listar solo viajes asignados al conductor autenticado", parameters: [{ name: "status", in: "query", schema: { type: "string", enum: ["PLANNED", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] } }, { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } }, { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } }], responses: { "200": { description: "Página de viajes propios", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfDriverTrips" } } } }, "401": { description: "Sesión no disponible" }, "403": { description: "Permiso o perfil de conductor requerido" } } } },
+    "/driver/trips/{tripId}": { get: { summary: "Consultar un viaje asignado al conductor autenticado", parameters: [{ name: "tripId", in: "path", required: true, schema: { type: "string", format: "uuid" } }], responses: { "200": { description: "Detalle del viaje propio", content: { "application/json": { schema: { $ref: "#/components/schemas/DriverTripResponse" } } } }, "404": { description: "El viaje no está disponible" } } } },
+    "/driver/trips/{tripId}/status": { patch: { summary: "Iniciar o completar un viaje asignado al conductor autenticado", parameters: [{ name: "tripId", in: "path", required: true, schema: { type: "string", format: "uuid" } }], requestBody: { required: true, content: { "application/json": { schema: { type: "object", additionalProperties: false, required: ["status"], properties: { status: { type: "string", enum: ["IN_PROGRESS", "COMPLETED"] } } } } } }, responses: { "200": { description: "Estado guardado con actor, evento y fecha", content: { "application/json": { schema: { $ref: "#/components/schemas/DriverTripResponse" } } } }, "403": { description: "Permiso requerido" }, "404": { description: "El viaje no está disponible" }, "409": { description: "La transición no es válida" } } } },
     "/vehicles": { get: { summary: "Buscar vehículos", responses: { "200": { description: "Página de vehículos" } } }, post: { summary: "Crear vehículo", responses: { "201": { description: "Vehículo creado" } } } },
     "/vehicles/{vehicleId}": { get: { summary: "Consultar vehículo", responses: { "200": { description: "Vehículo" } } }, patch: { summary: "Editar o desactivar vehículo", responses: { "200": { description: "Vehículo actualizado" } } } },
     "/operational-staff/employees": { get: { summary: "Listar personal de mvp-base", responses: { "200": { description: "Personal" } } } },
