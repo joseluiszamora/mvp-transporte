@@ -194,6 +194,7 @@ class BaseAuthClient {
     if (response.statusCode == 401) {
       await _rotateRefreshToken();
       response = await _sendTransport(path, method, body);
+      if (response.statusCode == 401) await _invalidateSession();
     }
     return _decodeResponse(response);
   }
@@ -227,6 +228,7 @@ class BaseAuthClient {
         ..._baseHeaders(),
         'Authorization': 'Bearer ${current.accessToken}',
       }, body);
+      if (response.statusCode == 401) await _invalidateSession();
     }
     return _decodeResponse(response);
   }
@@ -329,12 +331,12 @@ class BaseAuthClient {
 
   Future<void> _saveRotatedCookies(http.Response response) async {
     final cookies = response.headers['set-cookie'] ?? '';
-    final refresh = RegExp(r'(?:^|[,;]\s*)mvp_refresh=([^;,\s]+)')
-        .firstMatch(cookies)
-        ?.group(1);
-    final csrf = RegExp(r'(?:^|[,;]\s*)mvp_csrf=([^;,\s]+)')
-        .firstMatch(cookies)
-        ?.group(1);
+    final refresh = RegExp(
+      r'(?:^|[,;]\s*)mvp_refresh=([^;,\s]+)',
+    ).firstMatch(cookies)?.group(1);
+    final csrf = RegExp(
+      r'(?:^|[,;]\s*)mvp_csrf=([^;,\s]+)',
+    ).firstMatch(cookies)?.group(1);
     if (refresh == null || csrf == null) {
       await _clearSession();
       throw const ApiException(
@@ -424,6 +426,15 @@ class BaseAuthClient {
   Future<void> _clearSession() async {
     _session = null;
     await _storage.delete(key: _refreshSessionKey);
+  }
+
+  Future<Never> _invalidateSession() async {
+    await _clearSession();
+    throw const ApiException(
+      401,
+      'INVALID_SESSION',
+      'La sesión ya no está disponible. Inicia sesión nuevamente.',
+    );
   }
 
   Future<({String refreshToken, String csrfToken})?>

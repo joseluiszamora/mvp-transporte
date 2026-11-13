@@ -19,3 +19,5 @@ flutter run `
 Los proyectos nativos Android e iOS están en `android/` e `ios/`. El manifiesto de debug Android permite HTTP para el emulador; el manifiesto principal conserva el permiso de Internet y no habilita tráfico HTTP en producción. iOS requiere URLs HTTPS accesibles desde el simulador por su política ATS. En dispositivos físicos configura URLs HTTPS alcanzables desde la red del dispositivo. No agregues el secreto `MVP_BASE_INTEGRATION_KEY` a la app.
 
 TASK-016 quedó integrado en `main` de mvp-base mediante el PR #38 (merge commit `fd795e4`). Usa ese commit o uno posterior al levantar la API Base para que Transporte pueda llamar `GET /api/v1/employees/me`. Las dependencias quedaron resueltas con `flutter pub get` y `flutter analyze` terminó sin incidencias. La compilación APK Android queda pospuesta según la instrucción del propietario; cuando la solicite, asegúrate de tener espacio libre suficiente. Para compilar iOS se requiere macOS con Xcode.
+
+Si Base rechaza la sesión con `401` incluso después de renovarla, la app elimina los tokens locales y vuelve a la pantalla de acceso.

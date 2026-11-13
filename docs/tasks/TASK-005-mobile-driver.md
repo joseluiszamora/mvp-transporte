@@ -38,7 +38,7 @@ La API de Transporte consume este contrato en servidor, deriva el perfil operati
 
 La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. `flutter pub get` generó el lockfile y `flutter analyze` terminó sin incidencias. La compilación APK Android queda pospuesta por indicación del propietario; iOS requiere macOS con Xcode. Restan el recorrido funcional y la validación en dispositivos.
 
-El 2026-11-13, el propietario indicó posponer la compilación APK Android. Durante la revisión del flujo de autenticación se ajustó el callback de login para esperar la selección automática de organización y presentar sus errores en la pantalla de acceso.
+El 2026-11-13, el propietario indicó posponer la compilación APK Android. Durante la revisión del flujo de autenticación se ajustó el callback de login para esperar la selección automática de organización y presentar sus errores en la pantalla de acceso. Una respuesta `401` persistente tras renovar la sesión elimina los tokens locales y devuelve la app al login.
 
 ## Próximos pasos
 

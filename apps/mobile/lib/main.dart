@@ -57,8 +57,20 @@ class _DriverAppState extends State<DriverApp> {
       final session = await _auth.selectOrganization(organizationId);
       if (mounted) setState(() => _session = session);
     } catch (error) {
-      if (mounted) setState(() => _startupError = error.toString());
+      if (_isSessionExpired(error)) {
+        _onSessionExpired();
+      } else if (mounted) {
+        setState(() => _startupError = error.toString());
+      }
     }
+  }
+
+  void _onSessionExpired() {
+    if (!mounted) return;
+    setState(() {
+      _session = null;
+      _startupError = 'La sesión expiró. Inicia sesión nuevamente.';
+    });
   }
 
   Future<void> _onLogout() async {
@@ -108,6 +120,7 @@ class _DriverAppState extends State<DriverApp> {
               session: _session!,
               api: DriverApi(_auth),
               onLogout: _onLogout,
+              onSessionExpired: _onSessionExpired,
             ),
     );
   }
@@ -345,12 +358,14 @@ class DriverHomeScreen extends StatefulWidget {
     required this.session,
     required this.api,
     required this.onLogout,
+    required this.onSessionExpired,
     super.key,
   });
 
   final DriverSession session;
   final DriverApi api;
   final Future<void> Function() onLogout;
+  final VoidCallback onSessionExpired;
 
   @override
   State<DriverHomeScreen> createState() => _DriverHomeScreenState();
@@ -375,7 +390,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     try {
       _trips = await widget.api.listTrips();
     } catch (error) {
-      _error = error.toString();
+      if (_isSessionExpired(error)) {
+        widget.onSessionExpired();
+      } else {
+        _error = error.toString();
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -384,8 +403,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   Future<void> _openTrip(DriverTrip trip) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            DriverTripDetailScreen(api: widget.api, initialTrip: trip),
+        builder: (_) => DriverTripDetailScreen(
+          api: widget.api,
+          initialTrip: trip,
+          onSessionExpired: widget.onSessionExpired,
+        ),
       ),
     );
     if (mounted) await _loadTrips();
@@ -480,11 +502,13 @@ class DriverTripDetailScreen extends StatefulWidget {
   const DriverTripDetailScreen({
     required this.api,
     required this.initialTrip,
+    required this.onSessionExpired,
     super.key,
   });
 
   final DriverApi api;
   final DriverTrip initialTrip;
+  final VoidCallback onSessionExpired;
 
   @override
   State<DriverTripDetailScreen> createState() => _DriverTripDetailScreenState();
@@ -503,7 +527,11 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
     try {
       _trip = await widget.api.getTrip(_trip.id);
     } catch (error) {
-      _error = error.toString();
+      if (_isSessionExpired(error)) {
+        widget.onSessionExpired();
+      } else {
+        _error = error.toString();
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -521,7 +549,11 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
           SnackBar(content: Text('El cambio se guardó correctamente.')),
         );
     } catch (error) {
-      _error = error.toString();
+      if (_isSessionExpired(error)) {
+        widget.onSessionExpired();
+      } else {
+        _error = error.toString();
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -634,6 +666,9 @@ String _statusLabel(String value) => switch (value) {
   'CANCELLED' => 'Cancelado',
   _ => value,
 };
+
+bool _isSessionExpired(Object error) =>
+    error is ApiException && error.statusCode == 401;
 
 String _dateLabel(DateTime value) {
   final local = value.toLocal();
