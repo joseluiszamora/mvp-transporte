@@ -38,10 +38,11 @@ La API de Transporte consume este contrato en servidor, deriva el perfil operati
 
 La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. `flutter pub get` generó el lockfile y `flutter analyze` terminó sin incidencias. La compilación Android debug se detuvo en `mergeDebugNativeLibs` por falta de espacio; se eliminó el artefacto parcial generado. La compilación iOS requiere macOS con Xcode. También queda pendiente integrar TASK-016 en mvp-base.
 
+El 2026-11-13, el propietario indicó posponer la compilación APK Android. Durante la revisión del flujo de autenticación se ajustó el callback de login para esperar la selección automática de organización y presentar sus errores en la pantalla de acceso.
+
 ## Próximos pasos
 
 1. Revisar y publicar/integrar TASK-016 de mvp-base según su flujo aprobado.
-2. Terminar de revisar y validar los endpoints propios de conductor en Transporte.
-3. Repetir la compilación Android debug con espacio libre suficiente y compilar iOS en macOS con Xcode.
-4. Hacer el recorrido manual de login, selección de organización, viajes y transiciones.
-5. Mantener actualizada la guía de ejecución y el manejo móvil de sesión.
+2. Hacer el recorrido funcional tras integrar TASK-016: login, selección de organización, viajes y transiciones.
+3. Compilar el APK Android cuando el propietario lo solicite; compilar iOS en macOS con Xcode.
+4. Mantener actualizada la guía de ejecución y el manejo móvil de sesión.

@@ -50,8 +50,8 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
 - Consulta de viajes propios.
 - Actualización de estado e inicio/fin de viaje.
-- TASK-016 de mvp-base y endpoints móviles de Transporte están implementados en ramas locales; la app Flutter tiene source de sesión y pantallas.
-- Falta integrar la dependencia Base, generar proyectos nativos, resolver paquetes y hacer el recorrido funcional.
+- TASK-016 de mvp-base y endpoints móviles de Transporte están implementados en ramas locales; la app Flutter incluye sesión, pantallas y proyectos nativos, sus dependencias están resueltas y el análisis estático pasa.
+- Falta integrar la dependencia Base y hacer el recorrido funcional. El APK Android se compilará posteriormente, según la instrucción del propietario; la compilación iOS requiere macOS con Xcode.
 - Salida: app restringida a viajes de la empresa y conductor autenticados.
 
 ## Fase 5 — Versión inicial

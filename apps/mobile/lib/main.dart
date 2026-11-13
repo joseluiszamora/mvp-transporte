@@ -48,12 +48,8 @@ class _DriverAppState extends State<DriverApp> {
   }
 
   Future<void> _onLogin(DriverSession session) async {
-    try {
-      final resolved = await _resolveOrganization(session);
-      if (mounted) setState(() => _session = resolved);
-    } catch (error) {
-      if (mounted) setState(() => _startupError = error.toString());
-    }
+    final resolved = await _resolveOrganization(session);
+    if (mounted) setState(() => _session = resolved);
   }
 
   Future<void> _onSelectOrganization(String organizationId) async {
@@ -126,7 +122,7 @@ class LoginScreen extends StatefulWidget {
   });
 
   final BaseAuthClient auth;
-  final ValueChanged<DriverSession> onLogin;
+  final Future<void> Function(DriverSession) onLogin;
   final String? initialError;
 
   @override
@@ -154,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
-      widget.onLogin(
+      await widget.onLogin(
         await widget.auth.login(
           _emailController.text,
           _passwordController.text,
