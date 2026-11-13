@@ -411,7 +411,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       body: RefreshIndicator(
         onRefresh: _loadTrips,
         child: _loading
-            ? const ListView(
+            ? ListView(
                 children: [
                   SizedBox(
                     height: 260,
@@ -522,7 +522,7 @@ class _DriverTripDetailScreenState extends State<DriverTripDetailScreen> {
       _trip = await widget.api.transition(_trip.id, status);
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El cambio se guardó correctamente.')),
+          SnackBar(content: Text('El cambio se guardó correctamente.')),
         );
     } catch (error) {
       _error = error.toString();
