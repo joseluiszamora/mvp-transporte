@@ -88,6 +88,14 @@ class _DriverAppState extends State<DriverApp> {
       });
   }
 
+  String get _rootPageKey {
+    if (_loading) return 'loading';
+    final current = _session;
+    if (current == null) return 'login';
+    final organizationId = current.selectedOrganizationId;
+    return organizationId == null ? 'organization' : 'driver:$organizationId';
+  }
+
   @override
   void dispose() {
     _auth.dispose();
@@ -97,6 +105,7 @@ class _DriverAppState extends State<DriverApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      key: ValueKey(_rootPageKey),
       title: 'mvp-transporte · Conductor',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff1565c0)),
