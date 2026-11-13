@@ -32,17 +32,17 @@ Permitir que el conductor consulte sus viajes y actualice su estado desde Flutte
 
 ## Dependencia de identidad resuelta en desarrollo — 2026-11-12
 
-El propietario autorizó añadir en mvp-base una consulta propia. `GET /api/v1/employees/me` quedó implementado y validado en la rama `task/016-employee-self-context`, commit local `928d535`; devuelve solo IDs de empleado, organización y empresa activos desde el Bearer autenticado, sin recibir `employeeId` ni exigir permisos generales de lectura. No requiere migración. El commit aún no está publicado ni integrado en la rama principal de mvp-base.
+El propietario autorizó añadir en mvp-base una consulta propia. `GET /api/v1/employees/me` devuelve solo IDs de empleado, organización y empresa activos desde el Bearer autenticado, sin recibir `employeeId` ni exigir permisos generales de lectura. TASK-016 se integró en `main` de mvp-base mediante el PR #38, merge commit `fd795e4`; no requirió migración.
 
 La API de Transporte consume este contrato en servidor, deriva el perfil operativo propio de la empresa y filtra viajes por una asignación activa al conductor. La app nunca envía una identidad de empleado como evidencia. Cada operación requiere además `transport.driver_trips.read` o `transport.driver_trips.transition`; iniciar y completar requiere también `transport.audit.write` para la auditoría común.
 
-La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. `flutter pub get` generó el lockfile y `flutter analyze` terminó sin incidencias. La compilación Android debug se detuvo en `mergeDebugNativeLibs` por falta de espacio; se eliminó el artefacto parcial generado. La compilación iOS requiere macOS con Xcode. También queda pendiente integrar TASK-016 en mvp-base.
+La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. `flutter pub get` generó el lockfile y `flutter analyze` terminó sin incidencias. La compilación APK Android queda pospuesta por indicación del propietario; iOS requiere macOS con Xcode. Restan el recorrido funcional y la validación en dispositivos.
 
 El 2026-11-13, el propietario indicó posponer la compilación APK Android. Durante la revisión del flujo de autenticación se ajustó el callback de login para esperar la selección automática de organización y presentar sus errores en la pantalla de acceso.
 
 ## Próximos pasos
 
-1. Revisar y publicar/integrar TASK-016 de mvp-base según su flujo aprobado.
-2. Hacer el recorrido funcional tras integrar TASK-016: login, selección de organización, viajes y transiciones.
+1. Configurar `WEB_ORIGINS`, los permisos de Transporte y el perfil de conductor para el entorno funcional.
+2. Hacer el recorrido manual de login, selección de organización, viajes y transiciones.
 3. Compilar el APK Android cuando el propietario lo solicite; compilar iOS en macOS con Xcode.
 4. Mantener actualizada la guía de ejecución y el manejo móvil de sesión.
