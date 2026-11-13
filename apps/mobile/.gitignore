@@ -1,0 +1,15 @@
+# Flutter and Dart generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# IDE files
+*.iml
+.idea/
+
+# macOS metadata
+.DS_Store

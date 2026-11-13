@@ -14,7 +14,7 @@ Configura una credencial aleatoria de al menos 32 caracteres como servicio `tran
 
 La web inicia sesión contra `/api/v1/auth/login` de mvp-base y recibe un access token, la organización seleccionada y un token CSRF. Conserva el access token solo en memoria; el refresh token permanece en la cookie HttpOnly de Base. La web conserva el valor CSRF en `sessionStorage` para renovar la sesión al recargar la página y envía `credentials: include` en las llamadas de autenticación. El cierre de sesión llama a `/api/v1/auth/logout` de Base.
 
-TASK-016 de mvp-base aporta `GET /api/v1/employees/me` en el commit local `928d535`. La API de Transporte consume ese contrato en servidor y nunca acepta del móvil el `employeeId`. La app Flutter en `apps/mobile` incluye login, selección de organización, lista/detalle de viajes y acciones de inicio/fin; no puede arrancarse aún porque el SDK no generó los proyectos nativos ni se resolvieron paquetes. Configura en `WEB_ORIGINS` el valor enviado por `MVP_BASE_MOBILE_ORIGIN`.
+TASK-016 de mvp-base aporta `GET /api/v1/employees/me` en el commit local `928d535`. La API de Transporte consume ese contrato en servidor y nunca acepta del móvil el `employeeId`. La app Flutter en `apps/mobile` incluye login, selección de organización, lista/detalle de viajes, acciones de inicio/fin y proyectos nativos Android/iOS. Aún falta resolver paquetes Flutter y validar el arranque en un emulador o simulador. Configura en `WEB_ORIGINS` el valor enviado por `MVP_BASE_MOBILE_ORIGIN`; iOS requiere endpoints HTTPS por ATS, mientras que el HTTP local está habilitado solo en el manifiesto debug de Android.
 
 ## Operaciones usadas
 

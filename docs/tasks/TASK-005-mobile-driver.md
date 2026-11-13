@@ -36,12 +36,12 @@ El propietario autorizó añadir en mvp-base una consulta propia. `GET /api/v1/e
 
 La API de Transporte consume este contrato en servidor, deriva el perfil operativo propio de la empresa y filtra viajes por una asignación activa al conductor. La app nunca envía una identidad de empleado como evidencia. Cada operación requiere además `transport.driver_trips.read` o `transport.driver_trips.transition`; iniciar y completar requiere también `transport.audit.write` para la auditoría común.
 
-La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints y el source Flutter de sesión, lista, detalle y transiciones están implementados. El SDK no pudo generar las carpetas nativas Android/iOS ni resolver paquetes en este entorno; también queda pendiente la integración/aceptación de TASK-016 en mvp-base.
+La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens rotativos en almacenamiento seguro del dispositivo. Los endpoints, el source Flutter de sesión, lista, detalle y transiciones, y los proyectos nativos Android/iOS están implementados. Aún falta resolver paquetes Flutter y validar el arranque en dispositivos; también queda pendiente la integración/aceptación de TASK-016 en mvp-base.
 
 ## Próximos pasos
 
 1. Revisar y publicar/integrar TASK-016 de mvp-base según su flujo aprobado.
 2. Terminar de revisar y validar los endpoints propios de conductor en Transporte.
-3. Generar los proyectos nativos Android/iOS y resolver las dependencias Flutter.
+3. Resolver las dependencias Flutter y validar análisis/compilación en Android e iOS.
 4. Hacer el recorrido manual de login, selección de organización, viajes y transiciones.
-5. Documentar el manejo móvil de sesión y la guía de ejecución.
+5. Mantener actualizada la guía de ejecución y el manejo móvil de sesión.
