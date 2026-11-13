@@ -1,0 +1,3 @@
+[submodule "mvp-base"]
+	path = mvp-base
+	url = git@github.com:joseluiszamora/mvp-base.git

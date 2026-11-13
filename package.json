@@ -1,0 +1,36 @@
+{
+  "name": "mvp-transporte",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/shared-contracts"
+  ],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "scripts": {
+    "setup:base": "npm ci --prefix mvp-base",
+    "dev:api": "npm run dev --workspace @mvp-transporte/api",
+    "dev:web": "npm run dev --workspace @mvp-transporte/web",
+    "dev:base-api": "npm --prefix mvp-base run dev:api",
+    "dev:base-web": "npm --prefix mvp-base run dev:web",
+    "dev:base-email-worker": "npm --prefix mvp-base run dev:email-worker",
+    "bootstrap:platform-admin": "npm --prefix mvp-base run bootstrap:platform-admin",
+    "db:generate": "npm --prefix mvp-base run db:generate && npm run db:generate --workspace @mvp-transporte/api",
+    "db:migrate:dev": "npm --prefix mvp-base run db:migrate:dev && npm run db:migrate:dev --workspace @mvp-transporte/api",
+    "db:migrate:deploy": "npm --prefix mvp-base run db:migrate:deploy && npm run db:migrate:deploy --workspace @mvp-transporte/api",
+    "db:seed": "npm --prefix mvp-base run db:seed",
+    "lint": "biome lint apps/api/src apps/web/src packages/shared-contracts/src && npm --prefix mvp-base run lint",
+    "typecheck": "npm run build --workspace @mvp-transporte/shared-contracts && npm run typecheck --workspace @mvp-transporte/api && npm run typecheck --workspace @mvp-transporte/web && npm --prefix mvp-base run typecheck",
+    "test": "npm run test --workspaces --if-present && npm --prefix mvp-base run test",
+    "build": "npm run build --workspace @mvp-transporte/shared-contracts && npm run build --workspace @mvp-transporte/api && npm run build --workspace @mvp-transporte/web && npm --prefix mvp-base run build",
+    "test:integration": "npm --prefix mvp-base run test:integration"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "typescript": "7.0.2"
+  }
+}

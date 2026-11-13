@@ -2,7 +2,7 @@
 
 ## Estado
 
-Todos los entregables comienzan en estado **Pendiente**. Actualizar este archivo cuando una tarea se integre en main.
+Actualizar el estado según el trabajo y el Pull Request de cada entrega. Se marca **Completado** cuando el cambio se integra en `main`.
 
 Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
@@ -10,19 +10,20 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
 | Fase | Entrega | Dependencias | Milestone GitHub | Estado |
 |---|---|---|---|---|
-| 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura | M0 - Base del producto | Pendiente |
-| 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | Pendiente |
-| 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | Pendiente |
-| 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | Pendiente |
-| 4 | App móvil para conductor | API de viajes estable | M4 - Operación móvil | Pendiente |
+| 0 | Repositorio mvp-transporte e integración con mvp-base | Acceso a ambos repositorios y revisión de su estructura; TASK-007 | M0 - Base del producto | En revisión |
+| 1 | Vehículos y perfiles operativos | Fase 0, modelo de empresa y personal | M1 - Recursos principales | En curso |
+| 2 | Documentos, mantenimiento y combustible | Vehículos y personal | M2 - Control de recursos | En curso |
+| 3 | Viajes y asignaciones | Recursos, disponibilidad y documentos | M3 - Operación de viajes | En curso |
+| 4 | App móvil para conductor | API de viajes estable y contrato seguro usuario-empleado en mvp-base | M4 - Operación móvil | En curso |
 | 5 | Integración y versión inicial | Fases 1–4 y revisión de permisos | M5 - Versión inicial | Pendiente |
 
 ## Fase 0 — Base
 
 - Inspeccionar mvp-base: paquetes, contratos, autenticación, empresa activa, personal, archivos, permisos, auditoría, Prisma y comandos.
 - Fijar integración con paquete versionado si existe; de lo contrario, evaluar submódulo con commit/tag exacto.
-- Crear API/web en monorepo, configuración local, documentación y controles de GitHub.
-- Salida: aplicación local arranca y no duplica módulos base.
+- Se crearon API/web en el monorepo y se fijó el contrato HTTP de mvp-base.
+- Salida: aplicaciones independientes con configuración local y sin duplicación de módulos base.
+- TASK-007 fue aceptada e integrada en mvp-base. El Pull Request de TASK-001 en Transporte sigue en revisión.
 
 ## Fase 1 — Recursos principales
 
@@ -49,6 +50,8 @@ Estados permitidos: Pendiente, En curso, Bloqueado, En revisión y Completado.
 
 - Consulta de viajes propios.
 - Actualización de estado e inicio/fin de viaje.
+- TASK-016 de mvp-base y endpoints móviles de Transporte están implementados; TASK-016 se integró en mvp-base `main` por el PR #38. La app Flutter incluye sesión, pantallas y proyectos nativos, sus dependencias están resueltas y el análisis estático pasa.
+- Falta el recorrido funcional con el entorno integrado. El APK Android se compilará posteriormente, según la instrucción del propietario; la compilación iOS requiere macOS con Xcode.
 - Salida: app restringida a viajes de la empresa y conductor autenticados.
 
 ## Fase 5 — Versión inicial
