@@ -36,7 +36,7 @@ Planificar distribución, rutas cortas y viajes largos, asignando vehículo y tr
 ## Avance — 2026-11-12
 
 - Se implementaron los modelos `Trip`, `TripStop`, `TripCrewAssignment` y `TripEvent`; la migración `20261112141502_task_004_trips` se aplicó a `mvp_transport_local`.
-- La migración incremental `20261112170000_task_004_cancellation_reason_check` refuerza la restricción para exigir un motivo de cancelación no vacío. Su aplicación queda pendiente: PostgreSQL no responde en `localhost:5433` y el acceso al motor Docker local no estuvo disponible.
+- La migración incremental `20261112170000_task_004_cancellation_reason_check` refuerza la restricción para exigir un motivo de cancelación no vacío y se aplicó a `mvp_transport_local` el 2026-11-12.
 - La API permite planificar, revisar historial, reemplazar asignaciones antes del inicio y cambiar estados. La web incorpora el formulario y la operación de viajes.
 - Al confirmar o iniciar, se valida el vehículo activo, el mantenimiento programado o fuera de servicio, documentos `CURRENT` vencidos antes del fin, cobertura de conductor, perfiles internos activos y solapamientos de vehículo o persona.
 - La distribución exige uno o dos ayudantes totales; la ruta corta exige una o dos paradas y rechaza ayudantes; el viaje largo requiere empresa contratante, precinto(s) y permite relevos sucesivos.
