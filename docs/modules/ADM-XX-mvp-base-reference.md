@@ -4,7 +4,7 @@
 
 Identificar las dependencias de plataforma usadas por mvp-transporte. Esta ficha resume las interfaces verificadas; la documentación funcional vigente de cada ADM se mantiene en el repositorio mvp-base.
 
-La tabla de interfaces ADM se verificó en la revisión `52f2e449`. El contrato de producto de TASK-015 se integró después en `main` de mvp-base como `97c5840` y el submódulo de esta rama apunta a ese commit. El detalle de ejecución está en [docs/integration/mvp-base.md](../integration/mvp-base.md).
+La tabla de interfaces ADM se verificó en la revisión `52f2e449`. El contrato de producto de TASK-015 se integró después en `main` de mvp-base como `97c5840`; el submódulo de esta rama apunta ahora a `1a2d0d4`, que también incluye TASK-016. El detalle de ejecución está en [docs/integration/mvp-base.md](../integration/mvp-base.md).
 
 ## Módulos seleccionados
 

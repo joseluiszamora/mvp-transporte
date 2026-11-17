@@ -6,7 +6,7 @@ Producto de transporte que usa mvp-base para identidad, empresas, permisos, pers
 
 - `mvp-base/` es un submódulo fijado al commit registrado en [las decisiones del proyecto](docs/decisions.md).
 - mvp-base y Transporte se comunican por HTTP y conservan bases y migraciones separadas.
-- El contrato de autorización por alcance, auditoría y archivos externos quedó integrado en `main` de mvp-base en `97c5840`; el submódulo está fijado a esa revisión. CI runs 59 y 60 pasaron tras corregir el aislamiento de archivos. Transporte registra permisos al arrancar y valida cada operación con Base.
+- El contrato de autorización por alcance, auditoría y archivos externos se integró en `main` de mvp-base en `97c5840`; el submódulo está fijado a `1a2d0d4`, que incluye TASK-016 para resolver al empleado autenticado. CI runs 59 y 60 pasaron tras corregir el aislamiento de archivos. Transporte registra permisos al arrancar y valida cada operación con Base.
 - TASK-002 desarrolla vehículos con capacidad en kg y perfiles de conductor/ayudante ligados a Employee. La API no duplica identidad ni tablas de mvp-base.
 - TASK-003 implementa documentos, mantenimiento y combustible; la comprobación de archivos de extremo a extremo queda pendiente.
 - TASK-004 implementa planificación, tripulación, estados e historial de viajes; la fase sigue en curso.

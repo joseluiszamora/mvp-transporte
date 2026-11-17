@@ -32,4 +32,5 @@ Cerrar el alcance inicial y preparar una versión revisable de mvp-transporte.
 
 - La revisión estática encontró que CORS no permitía `PUT`, aunque la web usa ese método para reemplazar la asignación de un viaje. Se habilitó `PUT` en la lista de métodos de la API.
 - La especificación OpenAPI ahora describe `/openapi.json` como una ruta pública, en línea con su implementación.
+- Se actualizaron las referencias al pin actual del submódulo `mvp-base` a `1a2d0d4`; `97c5840` se conserva como la revisión histórica del contrato TASK-015.
 - Las comprobaciones funcionales de aislamiento, archivos y recorridos web/móvil siguen pendientes; no se ejecutaron pruebas ni se preparó el tag de versión.

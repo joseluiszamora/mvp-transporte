@@ -56,7 +56,7 @@ El contrato integrado de mvp-base (`97c5840`) valida sesiones, membresías y per
 - `apps/api`: API propia de Transporte, composición Express y módulos de transporte.
 - `apps/web`: navegación y pantallas web de Transporte.
 - `packages/shared-contracts`: contratos propios de Transporte realmente compartidos entre API y web.
-- `mvp-base/`: submódulo Git fijado a `97c5840`; conserva su workspace, API y base independientes.
+- `mvp-base/`: submódulo Git fijado a `1a2d0d4`; conserva su workspace, API y base independientes. Incluye el contrato de empleado autenticado integrado después del contrato de producto `97c5840`.
 - `docs/`: especificación funcional, decisiones, modelo de datos y tareas.
 
 Los workspaces de `apps/api`, `apps/web` y `packages/shared-contracts` pertenecen a Transporte. Los scripts de raíz ejecutan sus comandos y los de mvp-base por separado. El submódulo conserva su workspace, dependencias, API y migraciones.
