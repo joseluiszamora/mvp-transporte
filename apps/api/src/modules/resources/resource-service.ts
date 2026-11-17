@@ -24,6 +24,7 @@ import type { Prisma } from "../../prisma/generated/client.ts";
 import { ApiError } from "../../errors.ts";
 import { addBusinessDays, addUtcCalendarDays, businessDateKey, startOfBusinessDayUtc } from "../../utils/business-date.ts";
 import type { AuthorizedTarget, BaseIntegrationClient } from "../integrations/base-client.ts";
+import { lockVehicleRecord } from "../vehicles/vehicle-service.ts";
 
 type DocumentWithRenewal = ResourceDocument & { renewedBy?: { id: string } | null };
 type VehicleSnapshot = { id: string; organizationId: string; companyId: string; branchId: string | null; status: "ACTIVE" | "INACTIVE"; odometerKm: number | null };
@@ -515,9 +516,17 @@ export async function createFuelRecord(
   vehicle: VehicleSnapshot,
   input: { tankId: string; quantity: number; costAmount: number; currencyCode: string; odometerKm: number; occurredAt: Date; provider: string | null },
 ): Promise<FuelRecordItem> {
-  if (vehicle.status !== "ACTIVE") throw new ApiError(409, "VEHICLE_INACTIVE", "No se puede registrar combustible para un vehículo inactivo.");
-  if (vehicle.odometerKm !== null && input.odometerKm < vehicle.odometerKm) throw new ApiError(409, "ODOMETER_CANNOT_DECREASE", "El kilometraje no puede ser menor al último valor registrado.");
   return database.$transaction(async (transaction) => {
+    await lockVehicleRecord(transaction, vehicle.id);
+    const currentVehicle = await transaction.vehicle.findFirst({
+      where: { id: vehicle.id, ...scopeWhere(target) },
+      select: { status: true, odometerKm: true },
+    });
+    if (!currentVehicle) throw new ApiError(404, "VEHICLE_NOT_FOUND", "El vehículo no está disponible para esta empresa.");
+    if (currentVehicle.status !== "ACTIVE") throw new ApiError(409, "VEHICLE_INACTIVE", "No se puede registrar combustible para un vehículo inactivo.");
+    if (currentVehicle.odometerKm !== null && input.odometerKm < currentVehicle.odometerKm) {
+      throw new ApiError(409, "ODOMETER_CANNOT_DECREASE", "El kilometraje no puede ser menor al último valor registrado.");
+    }
     const tank = await transaction.vehicleFuelTank.findFirst({ where: { id: input.tankId, vehicleId: vehicle.id, ...scopeWhere(target), status: "ACTIVE" } });
     if (!tank) throw new ApiError(404, "FUEL_TANK_NOT_FOUND", "El tanque activo no está configurado para este vehículo.");
     if (input.quantity > tank.capacity.toNumber()) throw new ApiError(400, "FUEL_QUANTITY_EXCEEDS_TANK", "La carga supera la capacidad configurada del tanque.");
@@ -529,7 +538,9 @@ export async function createFuelRecord(
       quantity: input.quantity, costAmount: input.costAmount, currencyCode: input.currencyCode,
       odometerKm: input.odometerKm, occurredAt: input.occurredAt, provider: input.provider,
     }, include: { tank: { select: { name: true } } } });
-    if (vehicle.odometerKm === null || input.odometerKm > vehicle.odometerKm) await transaction.vehicle.update({ where: { id: vehicle.id }, data: { odometerKm: input.odometerKm } });
+    if (currentVehicle.odometerKm === null || input.odometerKm > currentVehicle.odometerKm) {
+      await transaction.vehicle.update({ where: { id: vehicle.id }, data: { odometerKm: input.odometerKm } });
+    }
     await base.audit(bearer, target, {
       action: "FUEL_RECORD_CREATED", resourceType: "transport.fuel_record", resourceId: row.id,
       after: { vehicleId: row.vehicleId, tankId: row.tankId, fuelType: row.fuelType, unit: row.unit, quantity: row.quantity.toNumber(), costAmount: row.costAmount.toNumber(), currencyCode: row.currencyCode, odometerKm: row.odometerKm },

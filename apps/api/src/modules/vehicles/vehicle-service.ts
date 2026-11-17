@@ -1,4 +1,4 @@
-import type { PrismaClient, Vehicle } from "../../prisma/generated/client.ts";
+import type { Prisma, PrismaClient, Vehicle } from "../../prisma/generated/client.ts";
 import type { PageResponse, VehicleItem } from "@mvp-transporte/shared-contracts";
 import { ApiError } from "../../errors.ts";
 import type { AuthorizedTarget, BaseIntegrationClient } from "../integrations/base-client.ts";
@@ -14,6 +14,12 @@ export interface VehicleCreateInput {
 }
 
 export type VehicleUpdateInput = Partial<VehicleCreateInput> & { status?: "ACTIVE" | "INACTIVE" };
+
+export async function lockVehicleRecord(transaction: Prisma.TransactionClient, vehicleId: string): Promise<void> {
+  const lockKey = `transport:vehicle:${vehicleId}`;
+  await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+  await transaction.$queryRaw<Array<{ id: string }>>`SELECT id FROM vehicles WHERE id = ${vehicleId}::uuid FOR UPDATE`;
+}
 
 function mapVehicle(row: Vehicle, maintenanceBlocked = false): VehicleItem {
   return {
@@ -157,6 +163,7 @@ export async function updateVehicle(
   input: VehicleUpdateInput,
 ): Promise<VehicleItem> {
   return database.$transaction(async (transaction) => {
+    await lockVehicleRecord(transaction, id);
     const current = await transaction.vehicle.findFirst({ where: { id, organizationId: target.organizationId, companyId: target.companyId } });
     if (!current || current.branchId !== target.branchId) throw new ApiError(404, "VEHICLE_NOT_FOUND", "El vehículo no está disponible.");
     if (input.odometerKm !== undefined && input.odometerKm !== null && current.odometerKm !== null && input.odometerKm < current.odometerKm) {
