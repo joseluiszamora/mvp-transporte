@@ -41,3 +41,7 @@ Planificar distribución, rutas cortas y viajes largos, asignando vehículo y tr
 - Al confirmar o iniciar, se valida el vehículo activo, el mantenimiento programado o fuera de servicio, documentos `CURRENT` vencidos antes del fin, cobertura de conductor, perfiles internos activos y solapamientos de vehículo o persona.
 - La distribución exige uno o dos ayudantes totales; la ruta corta exige una o dos paradas y rechaza ayudantes; el viaje largo requiere empresa contratante, precinto(s) y permite relevos sucesivos.
 - TASK-003 conserva pendiente la verificación de carga/listado/descarga de archivos solicitada para más adelante. No se ejecutaron pruebas automatizadas.
+
+## Avance — 2026-11-16
+
+- La comprobación de mantenimiento programado y vencimiento documental compara fechas de tipo calendario con los días locales de `America/La_Paz`, incluso cuando un viaje cruza la medianoche UTC.

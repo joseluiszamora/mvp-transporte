@@ -35,7 +35,7 @@ export function createApplication(database: PrismaClient, base: BaseIntegrationC
       if (!origin || config.webOrigins.includes(origin)) callback(null, true);
       else callback(new ApiError(403, "ORIGIN_NOT_ALLOWED", "El origen no está permitido."));
     },
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
     maxAge: 600,
   }));
@@ -107,6 +107,7 @@ const openApiDocument = {
   paths: {
     "/health": { get: { security: [], summary: "Comprobar disponibilidad", responses: { "200": { description: "API disponible" } } } },
     "/ready": { get: { security: [], summary: "Comprobar conexión de base de datos", responses: { "200": { description: "API lista" } } } },
+    "/openapi.json": { get: { security: [], summary: "Consultar la especificación OpenAPI", responses: { "200": { description: "Documento OpenAPI 3.1" } } } },
     "/companies": { get: { summary: "Listar empresas visibles en mvp-base", responses: { "200": { description: "Empresas" } } } },
     "/branches": { get: { summary: "Listar sucursales visibles en mvp-base", responses: { "200": { description: "Sucursales" } } } },
     "/driver/trips": { get: { summary: "Listar solo viajes asignados al conductor autenticado", parameters: [{ name: "status", in: "query", schema: { type: "string", enum: ["PLANNED", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] } }, { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 20 } }, { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } }], responses: { "200": { description: "Página de viajes propios", content: { "application/json": { schema: { $ref: "#/components/schemas/PageOfDriverTrips" } } } }, "401": { description: "Sesión no disponible" }, "403": { description: "Permiso o perfil de conductor requerido" } } } },
