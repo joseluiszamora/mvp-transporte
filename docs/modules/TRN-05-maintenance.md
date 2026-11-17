@@ -1,6 +1,6 @@
 # TRN-05 — Mantenimiento
 
-**Estado:** En curso — planes, registros y marca fuera de servicio implementados; la asignación de viajes pertenece a TASK-004.
+**Estado:** En curso — planes, registros, consulta de vencimientos y marca fuera de servicio implementados; las notificaciones automáticas no están incluidas.
 
 ## Propósito
 
@@ -26,10 +26,11 @@ Casos iniciales: pinchazo, raspón y reparación menor. Registrar categoría, de
 - Registrar servicio realizado con fecha y odómetro.
 - Conservar servicios anteriores.
 - Bloquear nuevas asignaciones cuando el vehículo esté fuera de servicio.
-- Mostrar mantenimiento próximo según kilometraje y rango de fechas.
+- Mostrar mantenimiento próximo según kilometraje alcanzado y rango de fechas configurado.
 
 ## Avance de implementación
 
 - Los planes calculan el siguiente km/fecha y la ventana configurable; completar un servicio avanza el siguiente vencimiento.
 - El vehículo expone `maintenanceBlocked` mientras un registro en curso marque `outOfService`.
-- El API de asignaciones consumirá esta señal cuando se implemente TASK-004. Las notificaciones de vencimiento y la consulta dedicada de tareas próximas siguen pendientes.
+- La consulta `/maintenance/upcoming` devuelve los planes activos dentro de su ventana de fechas o cuyo odómetro objetivo ya se alcanzó, ordenando primero los vencidos. Las notificaciones automáticas de vencimiento se mantienen diferidas.
+- La API de asignaciones consume la señal de mantenimiento durante la planificación del viaje (TASK-004).

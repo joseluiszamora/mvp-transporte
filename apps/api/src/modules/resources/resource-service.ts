@@ -4,6 +4,7 @@ import type {
   FuelSummaryItem,
   MaintenancePlanItem,
   MaintenanceRecordItem,
+  MaintenanceUpcomingItem,
   ResourceDocumentItem,
   VehicleFuelTankItem,
 } from "@mvp-transporte/shared-contracts";
@@ -21,10 +22,12 @@ import type {
 } from "../../prisma/generated/client.ts";
 import type { Prisma } from "../../prisma/generated/client.ts";
 import { ApiError } from "../../errors.ts";
+import { addBusinessDays, addUtcCalendarDays, businessDateKey, startOfBusinessDayUtc } from "../../utils/business-date.ts";
 import type { AuthorizedTarget, BaseIntegrationClient } from "../integrations/base-client.ts";
 
 type DocumentWithRenewal = ResourceDocument & { renewedBy?: { id: string } | null };
 type VehicleSnapshot = { id: string; organizationId: string; companyId: string; branchId: string | null; status: "ACTIVE" | "INACTIVE"; odometerKm: number | null };
+type FuelRecordFilters = { vehicleId?: string; fuelType?: FuelType; from?: Date; to?: Date };
 
 function scopeWhere(target: AuthorizedTarget) {
   return {
@@ -34,23 +37,21 @@ function scopeWhere(target: AuthorizedTarget) {
   };
 }
 
-function dayStartUtc(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
 export async function assertTripResourcesAvailable(
   transaction: Prisma.TransactionClient,
   target: AuthorizedTarget,
   trip: { vehicleId: string; plannedStartAt: Date; plannedEndAt: Date },
   employeeIds: string[],
 ): Promise<void> {
+  const tripStartDate = startOfBusinessDayUtc(trip.plannedStartAt);
+  const tripEndDate = startOfBusinessDayUtc(trip.plannedEndAt);
   const blockedByMaintenance = await transaction.maintenanceRecord.findFirst({ where: {
     organizationId: target.organizationId,
     companyId: target.companyId,
     vehicleId: trip.vehicleId,
     OR: [
       { status: "IN_PROGRESS", outOfService: true },
-      { status: "SCHEDULED", scheduledAt: { gte: dayStartUtc(trip.plannedStartAt), lte: dayStartUtc(trip.plannedEndAt) } },
+      { status: "SCHEDULED", scheduledAt: { gte: tripStartDate, lte: tripEndDate } },
     ],
   }, select: { id: true } });
   if (blockedByMaintenance) throw new ApiError(409, "TRIP_MAINTENANCE_CONFLICT", "El vehículo tiene mantenimiento activo o programado durante el viaje.");
@@ -59,7 +60,7 @@ export async function assertTripResourcesAvailable(
     organizationId: target.organizationId,
     companyId: target.companyId,
     status: "CURRENT",
-    expiresAt: { lt: dayStartUtc(trip.plannedEndAt) },
+    expiresAt: { lt: tripEndDate },
     OR: [
       { ownerType: "VEHICLE", vehicleId: trip.vehicleId },
       ...(employeeIds.length > 0 ? [{ ownerType: "EMPLOYEE" as const, employeeId: { in: employeeIds } }] : []),
@@ -204,10 +205,8 @@ function mapMaintenanceRecord(row: MaintenanceRecord): MaintenanceRecordItem {
 }
 
 function dateWindow(dueAt: Date, windowDays: number) {
-  const start = new Date(dueAt);
-  const end = new Date(dueAt);
-  start.setUTCDate(start.getUTCDate() - windowDays);
-  end.setUTCDate(end.getUTCDate() + windowDays);
+  const start = addUtcCalendarDays(dueAt, -windowDays);
+  const end = addUtcCalendarDays(dueAt, windowDays);
   return { windowStartAt: start, windowEndAt: end };
 }
 
@@ -217,6 +216,46 @@ export async function listMaintenancePlans(database: PrismaClient, target: Autho
     orderBy: [{ vehicleId: "asc" }, { name: "asc" }],
   });
   return rows.map(mapMaintenancePlan);
+}
+
+export async function listUpcomingMaintenance(
+  database: PrismaClient,
+  target: AuthorizedTarget,
+  vehicleId?: string,
+): Promise<MaintenanceUpcomingItem[]> {
+  const rows = await database.maintenancePlan.findMany({
+    where: { ...scopeWhere(target), status: "ACTIVE", ...(vehicleId ? { vehicleId } : {}) },
+    include: { vehicle: { select: { plate: true, odometerKm: true } } },
+    orderBy: [{ nextDueAt: "asc" }, { nextDueKm: "asc" }, { id: "asc" }],
+  });
+  const today = businessDateKey(new Date());
+  return rows.flatMap((row) => {
+    const dueDate = row.nextDueAt?.toISOString().slice(0, 10) ?? null;
+    const windowStart = row.windowStartAt?.toISOString().slice(0, 10) ?? dueDate;
+    const dateOverdue = dueDate !== null && dueDate < today;
+    const dateUpcoming = dueDate !== null && windowStart !== null && windowStart <= today && today <= dueDate;
+    const mileageDue = row.nextDueKm !== null && row.vehicle.odometerKm !== null && row.vehicle.odometerKm >= row.nextDueKm;
+    const reasons: MaintenanceUpcomingItem["reasons"] = [];
+    if (dateOverdue || dateUpcoming) reasons.push("DATE");
+    if (mileageDue) reasons.push("MILEAGE");
+    if (reasons.length === 0) return [];
+    const urgency: MaintenanceUpcomingItem["urgency"] = dateOverdue || mileageDue ? "OVERDUE" : "UPCOMING";
+    return [{
+      planId: row.id,
+      vehicleId: row.vehicleId,
+      vehiclePlate: row.vehicle.plate,
+      planName: row.name,
+      urgency,
+      reasons,
+      currentOdometerKm: row.vehicle.odometerKm,
+      nextDueKm: row.nextDueKm,
+      nextDueAt: dueDate,
+      windowStartAt: windowStart,
+    }];
+  }).sort((left, right) => {
+    if (left.urgency !== right.urgency) return left.urgency === "OVERDUE" ? -1 : 1;
+    return (left.nextDueAt ?? "9999-12-31").localeCompare(right.nextDueAt ?? "9999-12-31") || left.planName.localeCompare(right.planName);
+  });
 }
 
 export async function createMaintenancePlan(
@@ -229,7 +268,7 @@ export async function createMaintenancePlan(
 ): Promise<MaintenancePlanItem> {
   if (input.intervalKm !== null && vehicle.odometerKm === null) throw new ApiError(409, "ODOMETER_REQUIRED", "Registra el kilometraje del vehículo antes de crear un plan por km.");
   const nextDueKm = input.intervalKm === null ? null : (vehicle.odometerKm as number) + input.intervalKm;
-  const nextDueAt = input.intervalDays === null ? null : new Date(Date.now() + input.intervalDays * 86_400_000);
+  const nextDueAt = input.intervalDays === null ? null : addBusinessDays(new Date(), input.intervalDays);
   const window = nextDueAt ? dateWindow(nextDueAt, input.windowDays) : { windowStartAt: null, windowEndAt: null };
   return database.$transaction(async (transaction) => {
     const row = await transaction.maintenancePlan.create({ data: {
@@ -327,7 +366,7 @@ async function updatePlanAfterService(
   if (!plan) return null;
   if (plan.intervalKm !== null && completedKm === null) throw new ApiError(409, "ODOMETER_REQUIRED", "Registra el kilometraje al completar este plan preventivo.");
   const nextDueKm = plan.intervalKm === null ? null : (completedKm as number) + plan.intervalKm;
-  const nextDueAt = plan.intervalDays === null ? null : new Date(completedAt.getTime() + plan.intervalDays * 86_400_000);
+  const nextDueAt = plan.intervalDays === null ? null : addBusinessDays(completedAt, plan.intervalDays);
   const window = nextDueAt ? dateWindow(nextDueAt, plan.windowDays) : { windowStartAt: null, windowEndAt: null };
   await transaction.maintenancePlan.update({ where: { id: plan.id }, data: { nextDueKm, nextDueAt, ...window } });
   return {
@@ -389,9 +428,12 @@ function mapTank(row: VehicleFuelTank): VehicleFuelTankItem {
 }
 
 function mapFuelRecord(row: FuelRecord & { tank?: { name: string } }): FuelRecordItem {
+  const quantity = row.quantity.toNumber();
+  const costAmount = row.costAmount.toNumber();
   return {
     id: row.id, vehicleId: row.vehicleId, tankId: row.tankId, tankName: row.tank?.name ?? "Tanque",
-    fuelType: row.fuelType, unit: row.unit, quantity: row.quantity.toNumber(), costAmount: row.costAmount.toNumber(),
+    fuelType: row.fuelType, unit: row.unit, quantity, costAmount,
+    unitPrice: Number((costAmount / quantity).toFixed(6)),
     currencyCode: row.currencyCode.trim(), odometerKm: row.odometerKm, occurredAt: row.occurredAt.toISOString(), provider: row.provider,
   };
 }
@@ -442,9 +484,23 @@ export async function updateFuelTankStatus(
   });
 }
 
-export async function listFuelRecords(database: PrismaClient, target: AuthorizedTarget, vehicleId?: string) {
+function fuelRecordWhere(target: AuthorizedTarget, filters: FuelRecordFilters): Prisma.FuelRecordWhereInput {
+  return {
+    ...scopeWhere(target),
+    ...(filters.vehicleId ? { vehicleId: filters.vehicleId } : {}),
+    ...(filters.fuelType ? { fuelType: filters.fuelType } : {}),
+    ...(filters.from || filters.to ? {
+      occurredAt: {
+        ...(filters.from ? { gte: filters.from } : {}),
+        ...(filters.to ? { lt: filters.to } : {}),
+      },
+    } : {}),
+  };
+}
+
+export async function listFuelRecords(database: PrismaClient, target: AuthorizedTarget, filters: FuelRecordFilters = {}) {
   const rows = await database.fuelRecord.findMany({
-    where: { ...scopeWhere(target), ...(vehicleId ? { vehicleId } : {}) },
+    where: fuelRecordWhere(target, filters),
     include: { tank: { select: { name: true } } },
     orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
   });
@@ -482,10 +538,10 @@ export async function createFuelRecord(
   });
 }
 
-export async function fuelSummary(database: PrismaClient, target: AuthorizedTarget, vehicleId?: string): Promise<FuelSummaryItem[]> {
+export async function fuelSummary(database: PrismaClient, target: AuthorizedTarget, filters: FuelRecordFilters = {}): Promise<FuelSummaryItem[]> {
   const rows = await database.fuelRecord.groupBy({
     by: ["fuelType", "unit", "currencyCode"],
-    where: { ...scopeWhere(target), ...(vehicleId ? { vehicleId } : {}) },
+    where: fuelRecordWhere(target, filters),
     _sum: { quantity: true, costAmount: true },
     _count: { _all: true },
     orderBy: [{ fuelType: "asc" }, { unit: "asc" }, { currencyCode: "asc" }],

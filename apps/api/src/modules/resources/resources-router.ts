@@ -7,7 +7,7 @@ import type { AuthorizedTarget, BaseIntegrationClient } from "../integrations/ba
 import {
   assertRenewalTarget, createDocument, createFuelRecord, createFuelTank, createMaintenancePlan,
   createMaintenanceRecord, fuelSummary, getDocument, listDocuments, listFuelRecords, listFuelTanks,
-  listMaintenancePlans, listMaintenanceRecords, updateFuelTankStatus, updateMaintenancePlanStatus,
+  listMaintenancePlans, listMaintenanceRecords, listUpcomingMaintenance, updateFuelTankStatus, updateMaintenancePlanStatus,
   updateMaintenanceRecord,
 } from "./resource-service.ts";
 
@@ -159,6 +159,20 @@ function parseFuelUnitForType(fuelType: FuelType, value: unknown): FuelUnit {
   return unit;
 }
 
+function fuelRecordFilters(request: Request) {
+  const vehicleId = optionalUuid(queryValue(request, "vehicleId"), "El vehículo");
+  const fuelTypeValue = queryValue(request, "fuelType");
+  const from = dateTime(queryValue(request, "from"), "La fecha inicial", true);
+  const to = dateTime(queryValue(request, "to"), "La fecha final", true);
+  if (from && to && from >= to) throw new ApiError(400, "INVALID_REQUEST", "La fecha inicial debe ser anterior al límite final.");
+  return {
+    ...(vehicleId ? { vehicleId } : {}),
+    ...(fuelTypeValue ? { fuelType: enumValue(fuelTypeValue, ["GASOLINE", "GNV"] as const, "El combustible") } : {}),
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  };
+}
+
 function attachmentName(value: string): string {
   return value.replace(/[\r\n\0]/gu, "_").replace(/[^\x20-\x7e]/gu, "_").replace(/"/gu, "_").slice(0, 120) || "documento";
 }
@@ -228,6 +242,13 @@ export function createResourcesRouter(database: PrismaClient, base: BaseIntegrat
     const target = await listTarget(base, token, request, "transport.maintenance.read");
     const vehicleId = optionalUuid(queryValue(request, "vehicleId"), "El vehículo");
     response.status(200).json({ items: await listMaintenancePlans(database, target, vehicleId) });
+  }));
+
+  router.get("/maintenance/upcoming", asyncRoute(async (request, response) => {
+    const token = bearer(request);
+    const target = await listTarget(base, token, request, "transport.maintenance.read");
+    const vehicleId = optionalUuid(queryValue(request, "vehicleId"), "El vehículo");
+    response.status(200).json({ items: await listUpcomingMaintenance(database, target, vehicleId) });
   }));
 
   router.post("/maintenance/plans", asyncRoute(async (request, response) => {
@@ -349,8 +370,7 @@ export function createResourcesRouter(database: PrismaClient, base: BaseIntegrat
   router.get("/fuel/records", asyncRoute(async (request, response) => {
     const token = bearer(request);
     const target = await listTarget(base, token, request, "transport.fuel.read");
-    const vehicleId = optionalUuid(queryValue(request, "vehicleId"), "El vehículo");
-    response.status(200).json({ items: await listFuelRecords(database, target, vehicleId) });
+    response.status(200).json({ items: await listFuelRecords(database, target, fuelRecordFilters(request)) });
   }));
 
   router.post("/fuel/records", asyncRoute(async (request, response) => {
@@ -377,8 +397,7 @@ export function createResourcesRouter(database: PrismaClient, base: BaseIntegrat
   router.get("/fuel/summary", asyncRoute(async (request, response) => {
     const token = bearer(request);
     const target = await listTarget(base, token, request, "transport.fuel.read");
-    const vehicleId = optionalUuid(queryValue(request, "vehicleId"), "El vehículo");
-    response.status(200).json({ items: await fuelSummary(database, target, vehicleId) });
+    response.status(200).json({ items: await fuelSummary(database, target, fuelRecordFilters(request)) });
   }));
 
   return router;

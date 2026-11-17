@@ -1,6 +1,6 @@
 # TRN-04 — Documentación
 
-**Estado:** En curso — API y pantalla base implementadas; falta validación con mvp-base activo y filtros adicionales.
+**Estado:** En curso — API y pantalla implementadas con filtros por titular, tipo y vigencia; falta validación con mvp-base activo.
 
 ## Propósito
 
@@ -35,4 +35,4 @@ Guardar documentos de vehículos y personal con archivos y datos de vigencia.
 - Vehículos y empleados usan los recursos `VEHICLE` y `EMPLOYEE` registrados en el manifiesto de Transporte.
 - La renovación agrega un documento nuevo y conserva el anterior como `SUPERSEDED`.
 - La API descarga el contenido desde mvp-base solo después de validar autorización y el permiso de descarga.
-- La búsqueda por tipo/estado y el flujo de archivos contra un mvp-base local activo siguen pendientes.
+- La pantalla filtra por tipo y vigencia (vigente, por vencer en 30 días, vencido, sin vencimiento y renovado). El flujo de archivos contra un mvp-base local activo sigue pendiente de validación.

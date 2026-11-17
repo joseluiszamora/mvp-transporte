@@ -101,6 +101,19 @@ export interface MaintenancePlanItem {
   updatedAt: string;
 }
 
+export interface MaintenanceUpcomingItem {
+  planId: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  planName: string;
+  urgency: "UPCOMING" | "OVERDUE";
+  reasons: Array<"DATE" | "MILEAGE">;
+  currentOdometerKm: number | null;
+  nextDueKm: number | null;
+  nextDueAt: string | null;
+  windowStartAt: string | null;
+}
+
 export interface MaintenanceRecordItem {
   id: string;
   vehicleId: string;
@@ -138,6 +151,7 @@ export interface FuelRecordItem {
   fuelType: FuelType;
   unit: FuelUnit;
   quantity: number;
+  unitPrice: number;
   costAmount: number;
   currencyCode: string;
   odometerKm: number;
