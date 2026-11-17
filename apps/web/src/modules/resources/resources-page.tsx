@@ -11,6 +11,7 @@ import LocalGasStationRounded from "@mui/icons-material/LocalGasStationRounded";
 import { useSession } from "../../session.tsx";
 import { EmptyState } from "../../components/empty-state.tsx";
 import { formatDate, formatNumber } from "../../utils/format.ts";
+import { addCalendarDays, businessDateKey, businessDateTimeInput, businessDateTimeToIso } from "../../utils/business-time.ts";
 import type {
   BranchOption, DocumentOwnerType, EmployeeOption, FuelRecordItem, FuelSummaryItem, FuelType,
   FuelUnit, MaintenancePlanItem, MaintenanceRecordItem, MaintenanceUpcomingItem, PageResponse, ResourceDocumentItem,
@@ -28,26 +29,18 @@ const maintenanceStatusLabels: Record<MaintenanceRecordItem["status"], string> =
 function documentValidity(document: ResourceDocumentItem): { key: Exclude<DocumentValidityFilter, "ALL">; label: string; color: "default" | "success" | "warning" | "error" } {
   if (document.status === "SUPERSEDED") return { key: "SUPERSEDED", label: "Renovado", color: "default" };
   if (!document.expiresAt) return { key: "NO_EXPIRY", label: "Sin vencimiento", color: "default" };
-  const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const now = new Date(); const upcoming = new Date(now); upcoming.setDate(upcoming.getDate() + 30);
-  const today = dateKey(now); const soon = dateKey(upcoming);
+  const today = businessDateKey(new Date()); const soon = addCalendarDays(today, 30);
   if (document.expiresAt < today) return { key: "EXPIRED", label: "Vencido", color: "error" };
   if (document.expiresAt <= soon) return { key: "EXPIRING_SOON", label: "Por vencer", color: "warning" };
   return { key: "VALID", label: "Vigente", color: "success" };
 }
 
-function localDateTimeValue(date = new Date()): string {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-}
-
 function localDayStartIso(value: string): string {
-  return new Date(`${value}T00:00:00`).toISOString();
+  return businessDateTimeToIso(`${value}T00:00`);
 }
 
 function localDayAfterStartIso(value: string): string {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + 1);
-  return date.toISOString();
+  return businessDateTimeToIso(`${addCalendarDays(value, 1)}T00:00`);
 }
 
 export function ResourcesPage({ companyId, branchId, branches, branchesError, onBranchChange, onNotice }: {
@@ -213,7 +206,7 @@ function MaintenancePanel({ companyId, branchId, vehicleId, onNotice }: { compan
 function FuelPanel({ companyId, branchId, vehicleId, onNotice }: { companyId: string; branchId: string; vehicleId: string; onNotice: (message: string) => void }) {
   const { apiRequest } = useSession(); const client = useQueryClient();
   const [tankName, setTankName] = useState(""); const [fuelType, setFuelType] = useState<FuelType>("GASOLINE"); const [unit, setUnit] = useState<FuelUnit>("LITER"); const [capacity, setCapacity] = useState("");
-  const [tankId, setTankId] = useState(""); const [quantity, setQuantity] = useState(""); const [costAmount, setCostAmount] = useState(""); const [odometerKm, setOdometerKm] = useState(""); const [provider, setProvider] = useState(""); const [occurredAt, setOccurredAt] = useState(localDateTimeValue);
+  const [tankId, setTankId] = useState(""); const [quantity, setQuantity] = useState(""); const [costAmount, setCostAmount] = useState(""); const [odometerKm, setOdometerKm] = useState(""); const [provider, setProvider] = useState(""); const [occurredAt, setOccurredAt] = useState(businessDateTimeInput);
   const [filterFuelType, setFilterFuelType] = useState<FuelType | "ALL">("ALL"); const [fromDate, setFromDate] = useState(""); const [toDate, setToDate] = useState("");
   const params = `companyId=${encodeURIComponent(companyId)}${branchId ? `&branchId=${encodeURIComponent(branchId)}` : ""}&vehicleId=${encodeURIComponent(vehicleId)}`;
   const filterQuery = new URLSearchParams({ ...(filterFuelType === "ALL" ? {} : { fuelType: filterFuelType }), ...(fromDate ? { from: localDayStartIso(fromDate) } : {}), ...(toDate ? { to: localDayAfterStartIso(toDate) } : {}) }).toString();
@@ -225,7 +218,7 @@ function FuelPanel({ companyId, branchId, vehicleId, onNotice }: { companyId: st
   useEffect(() => { if (!tankId && tanks.data?.find((tank) => tank.status === "ACTIVE")) setTankId(tanks.data.find((tank) => tank.status === "ACTIVE")?.id ?? ""); }, [tankId, tanks.data]);
   const refresh = () => { void client.invalidateQueries({ queryKey: ["fuel-tanks", companyId, branchId, vehicleId] }); void client.invalidateQueries({ queryKey: ["fuel-records", companyId, branchId, vehicleId] }); void client.invalidateQueries({ queryKey: ["fuel-summary", companyId, branchId, vehicleId] }); };
   const addTank = useMutation({ mutationFn: async () => { const response = await apiRequest("/fuel/tanks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId, vehicleId, name: tankName.trim(), fuelType, unit, capacity: Number(capacity) }) }); return response.json(); }, onSuccess: () => { setTankName(""); setCapacity(""); refresh(); }, onError: (error: Error) => onNotice(error.message) });
-  const addRecord = useMutation({ mutationFn: async () => { const response = await apiRequest("/fuel/records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId, vehicleId, tankId, quantity: Number(quantity), costAmount: Number(costAmount), odometerKm: Number(odometerKm), occurredAt: new Date(occurredAt).toISOString(), provider: provider.trim() || null }) }); return response.json(); }, onSuccess: () => { setQuantity(""); setCostAmount(""); setProvider(""); setOccurredAt(localDateTimeValue()); refresh(); }, onError: (error: Error) => onNotice(error.message) });
+  const addRecord = useMutation({ mutationFn: async () => { const response = await apiRequest("/fuel/records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ companyId, vehicleId, tankId, quantity: Number(quantity), costAmount: Number(costAmount), odometerKm: Number(odometerKm), occurredAt: businessDateTimeToIso(occurredAt), provider: provider.trim() || null }) }); return response.json(); }, onSuccess: () => { setQuantity(""); setCostAmount(""); setProvider(""); setOccurredAt(businessDateTimeInput()); refresh(); }, onError: (error: Error) => onNotice(error.message) });
   const changeTank = useMutation({ mutationFn: async (tank: VehicleFuelTankItem) => { const response = await apiRequest(`/fuel/tanks/${tank.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: tank.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" }) }); return response.json(); }, onSuccess: refresh, onError: (error: Error) => onNotice(error.message) });
   const units: FuelUnit[] = fuelType === "GASOLINE" ? ["LITER"] : ["CUBIC_METER", "KILOGRAM"];
   return <Stack spacing={2.5}>

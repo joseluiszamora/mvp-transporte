@@ -24,6 +24,7 @@ import type {
 } from "@mvp-transporte/shared-contracts";
 import { useSession } from "../../session.tsx";
 import { EmptyState } from "../../components/empty-state.tsx";
+import { businessDateTimeInput, businessDateTimeToIso } from "../../utils/business-time.ts";
 
 interface TripsPageProps {
   companyId: string;
@@ -53,15 +54,11 @@ const statusLabels: Record<TripStatus, string> = {
 };
 
 function localDateTime(offsetMinutes: number): string {
-  const date = new Date(Date.now() + offsetMinutes * 60_000);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+  return businessDateTimeInput(new Date(Date.now() + offsetMinutes * 60_000));
 }
 
 function toIso(value: string): string {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) throw new Error("Completa las fechas previstas del viaje.");
-  return date.toISOString();
+  try { return businessDateTimeToIso(value); } catch { throw new Error("Completa las fechas previstas del viaje."); }
 }
 
 function displayDate(value: string): string {

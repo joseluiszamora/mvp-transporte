@@ -45,3 +45,4 @@ Planificar distribución, rutas cortas y viajes largos, asignando vehículo y tr
 ## Avance — 2026-11-16
 
 - La comprobación de mantenimiento programado y vencimiento documental compara fechas de tipo calendario con los días locales de `America/La_Paz`, incluso cuando un viaje cruza la medianoche UTC.
+- La creación web interpreta los horarios introducidos como hora de `America/La_Paz`; la web y el móvil muestran el mismo horario operativo aunque el dispositivo use otra zona.

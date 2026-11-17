@@ -7,5 +7,8 @@ export function formatDate(value: string): string {
   const date = dateOnly
     ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
     : new Date(value);
-  return new Intl.DateTimeFormat("es-BO", { dateStyle: "medium" }).format(date);
+  return new Intl.DateTimeFormat("es-BO", {
+    dateStyle: "medium",
+    ...(!dateOnly ? { timeZone: "America/La_Paz" } : {}),
+  }).format(date);
 }

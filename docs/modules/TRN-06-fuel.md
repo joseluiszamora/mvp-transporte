@@ -34,5 +34,5 @@ FuelRecord guarda tanque, fecha, cantidad, unidad, precio por unidad, importe to
 
 - El tanque determina combustible y unidad; la carga solo acepta un tanque activo del mismo vehículo y no supera su capacidad.
 - Los resúmenes separan combustible, unidad y moneda. Gasolina usa litros; GNV admite metros cúbicos o kilogramos.
-- El costo total, odómetro y proveedor se guardan; el precio unitario se calcula desde el costo y la cantidad para evitar valores divergentes. La web filtra cargas y resumen por combustible y rango de fechas.
+- El costo total, odómetro y proveedor se guardan; el precio unitario se calcula desde el costo y la cantidad para evitar valores divergentes. La web filtra cargas y resumen por combustible y rango de fechas del calendario operativo de `America/La_Paz`.
 - El comprobante adjunto queda pendiente de una extensión explícita del contrato de archivos de mvp-base para asociar archivos a cargas de combustible; no se crea almacenamiento paralelo.
