@@ -29,6 +29,7 @@ Permitir que el conductor consulte sus viajes y actualice su estado desde Flutte
 - La lista móvil pagina con `limit`/`offset` y permite cargar más viajes sin enviar IDs de empresa o empleado.
 - La selección de organización bloquea envíos duplicados mientras mvp-base actualiza la sesión.
 - La app permite solo iniciar un viaje asignado (`ASSIGNED` → `IN_PROGRESS`) y completarlo (`IN_PROGRESS` → `COMPLETED`); las fechas y el actor vienen del servidor.
+- Los horarios de los viajes se muestran en `America/La_Paz`, independiente de la zona configurada en el teléfono.
 - El refresh token y CSRF quedan en almacenamiento seguro del dispositivo; el access token vive en memoria.
 - La app usa la API; no accede directamente a PostgreSQL.
 
@@ -43,6 +44,8 @@ La sesión móvil usa el mecanismo compartido de mvp-base y guarda los tokens ro
 El 2026-11-13, el propietario indicó posponer la compilación APK Android. Durante la revisión del flujo de autenticación se ajustó el callback de login para esperar la selección automática de organización y presentar sus errores en la pantalla de acceso. Una respuesta `401` persistente tras renovar la sesión elimina los tokens locales y devuelve la app al login.
 
 La pantalla de selección de organización desactiva el formulario y muestra progreso mientras mvp-base actualiza la sesión; así evita peticiones paralelas con organizaciones distintas.
+
+La app usa la base IANA de zonas horarias para presentar los horarios de viaje en `America/La_Paz`, igual que la web. No se toma el huso local del dispositivo como zona operativa.
 
 ## Próximos pasos
 

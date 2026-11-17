@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:mvp_transporte_mobile/src/api/base_auth_client.dart';
 import 'package:mvp_transporte_mobile/src/api/driver_api.dart';
 import 'package:mvp_transporte_mobile/src/api/driver_trip.dart';
+import 'package:timezone/data/latest.dart' as timezone_data;
+import 'package:timezone/timezone.dart' as timezone;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  timezone_data.initializeTimeZones();
   runApp(const DriverApp());
 }
 
@@ -800,7 +803,10 @@ bool _isSessionExpired(Object error) =>
     error is ApiException && error.statusCode == 401;
 
 String _dateLabel(DateTime value) {
-  final local = value.toLocal();
+  final local = timezone.TZDateTime.from(
+    value.toUtc(),
+    timezone.getLocation('America/La_Paz'),
+  );
   String two(int part) => part.toString().padLeft(2, '0');
-  return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)}';
+  return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)} (hora Bolivia)';
 }

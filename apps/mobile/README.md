@@ -20,4 +20,4 @@ Los proyectos nativos Android e iOS están en `android/` e `ios/`. El manifiesto
 
 TASK-016 quedó integrado en `main` de mvp-base mediante el PR #38 (merge commit `fd795e4`). Usa ese commit o uno posterior al levantar la API Base para que Transporte pueda llamar `GET /api/v1/employees/me`. Las dependencias quedaron resueltas con `flutter pub get` y `flutter analyze` terminó sin incidencias. La compilación APK Android queda pospuesta según la instrucción del propietario; cuando la solicite, asegúrate de tener espacio libre suficiente. Para compilar iOS se requiere macOS con Xcode.
 
-Si Base rechaza la sesión con `401` incluso después de renovarla, la app elimina los tokens locales y vuelve a la pantalla de acceso.
+Si Base rechaza la sesión con `401` incluso después de renovarla, la app elimina los tokens locales y vuelve a la pantalla de acceso. Las horas de los viajes se muestran en `America/La_Paz`, igual que en la web, aunque el teléfono use otra zona horaria.
