@@ -39,6 +39,9 @@ Planificar viajes y asignar vehículo y tripulación con reglas específicas por
 - Estados de viaje: planificado, asignado, en curso, completado y cancelado.
 - Guardar fechas previstas y reales; conservar los cambios de conductor.
 - Registrar quién creó, asignó, inició y completó el viaje usando la identidad de mvp-base.
+- Confirmar e iniciar revalidan disponibilidad del vehículo, mantenimiento, documentos vigentes registrados y perfiles/estado de empleados.
+- Los cambios de asignación y de estado se guardan como eventos locales y se envían a auditoría de mvp-base.
+- La cancelación exige motivo, libera los intervalos activos y conserva su historial.
 
 El arqueo de ayudantes queda fuera del alcance.
 
@@ -49,3 +52,9 @@ El arqueo de ayudantes queda fuera del alcance.
 - Bloquear asignaciones solapadas o recursos no disponibles.
 - Permitir relevos de conductor en un viaje largo sin perder historial.
 - Registrar inicio, finalización y cancelación con sus fechas.
+
+## Implementación TASK-004
+
+La API expone `/trips`, `/trips/{tripId}`, `/trips/{tripId}/assignment` y `/trips/{tripId}/status`. Una planificación nace en `PLANNED`; al pasar a `ASSIGNED`, el servicio valida la cobertura completa de conductores y toma bloqueos transaccionales por vehículo y empleado antes de consultar solapamientos. Los intervalos contiguos pueden compartir límite de fin/inicio.
+
+El flujo revisa documentos operativos `CURRENT` con vencimiento anterior al día de fin del viaje. Como no hay un catálogo que marque documentos obligatorios por tipo, la ausencia de un documento no bloquea la asignación; se rechaza un documento vencido que sí esté registrado como actual.

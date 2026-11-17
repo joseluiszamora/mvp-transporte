@@ -1,6 +1,6 @@
 # TASK-006 — Integración y versión inicial
 
-**Estado:** Pendiente  
+**Estado:** En curso
 **Prioridad:** P1  
 **Milestone:** M5 - Versión inicial
 
@@ -27,3 +27,15 @@ Cerrar el alcance inicial y preparar una versión revisable de mvp-transporte.
 - Comandos de validación reales quedan documentados.
 - La documentación refleja el estado del repositorio y las limitaciones conocidas.
 - El tag v1.0.0 solo se crea cuando el alcance de lanzamiento está completo.
+
+## Avance — 2026-11-16
+
+- La revisión estática encontró que CORS no permitía `PUT`, aunque la web usa ese método para reemplazar la asignación de un viaje. Se habilitó `PUT` en la lista de métodos de la API.
+- La especificación OpenAPI ahora describe `/openapi.json` como una ruta pública, en línea con su implementación.
+- Se actualizaron las referencias al pin actual del submódulo `mvp-base` a `1a2d0d4`; `97c5840` se conserva como la revisión histórica del contrato TASK-015.
+- La web y la app móvil ahora interpretan y presentan fechas operativas en `America/La_Paz`, aunque el navegador o dispositivo tenga otra zona horaria.
+- Las APIs de viajes y combustible rechazan fechas sin zona horaria y calendarios imposibles; los clientes deben enviar instantes RFC 3339 explícitos.
+- El cliente de mvp-base limita HTTP a loopback, exige HTTPS para hosts remotos y rechaza redirecciones para proteger las credenciales de integración y de usuario.
+- La carga de documentos valida sesión y permisos antes de leer el cuerpo multipart; los cuerpos que superan el límite responden con un error HTTP 413 explícito.
+- Las cargas de combustible y las ediciones concurrentes del vehículo serializan el cambio de odómetro con un bloqueo de fila transaccional.
+- Las comprobaciones funcionales de aislamiento, archivos y recorridos web/móvil siguen pendientes; no se ejecutaron pruebas ni se preparó el tag de versión.

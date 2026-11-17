@@ -18,14 +18,16 @@ Propietarios y agrupaciones de flota se difieren.
 
 - Cada vehículo pertenece a una empresa.
 - La placa es única dentro de la empresa.
-- Estados iniciales sugeridos: disponible, asignado, mantenimiento e inactivo; adaptar a catálogos y convenciones existentes.
+- El estado administrativo es ACTIVE o INACTIVE. La disponibilidad por viaje y mantenimiento se calcula cuando se implementen esos módulos.
 - Un vehículo inactivo, bloqueado por mantenimiento o ya asignado en el intervalo no puede recibir una asignación nueva.
 - Mantener registros históricos; desactivar en lugar de borrar si hay relaciones operativas.
 - Kilometraje registrado no debe disminuir salvo corrección auditada.
 
 ## Datos principales
 
-Vehicle: plate, vehicleType, make, model, year, capacity, odometer, status, companyId, createdAt, updatedAt. Confirmar unidades de capacidad con el uso real antes de implementar.
+Vehicle: plate, vehicleType, make, model, year, `capacityKg`, `odometerKm`, status, organizationId, companyId, branchId opcional, createdAt y updatedAt. La capacidad se expresa en kilogramos; el kilometraje, en kilómetros.
+
+La API y la pantalla inicial están en `apps/api/src/modules/vehicles` y `apps/web/src/modules/vehicles`. `capacityKg` admite decimales hasta dos posiciones y debe ser positivo; `odometerKm` es entero no negativo y la API impide disminuirlo o borrarlo después de registrar un valor. Las placas se normalizan para detectar duplicados por empresa, incluso si difieren en espacios o guiones. El estado del módulo es ACTIVE/INACTIVE; la disponibilidad por viajes y mantenimiento se calculará en sus respectivas fases.
 
 ## Dependencias
 

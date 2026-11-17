@@ -1,5 +1,7 @@
 # TRN-06 — Combustible
 
+**Estado:** En curso — configuración de tanques, cargas, filtros por periodo y resumen por combustible implementados.
+
 ## Propósito
 
 Registrar tanques y cargas de combustible por vehículo, manteniendo separadas gasolina y GNV.
@@ -25,5 +27,12 @@ FuelRecord guarda tanque, fecha, cantidad, unidad, precio por unidad, importe to
 
 - Configurar al menos un tanque por vehículo.
 - Registrar gasolina y GNV en tanques distintos para el mismo vehículo.
-- Consultar cantidades y costos filtrados por vehículo, combustible y fecha.
+- Consultar cantidades y costos filtrados por vehículo, combustible y periodo.
 - Vincular el comprobante usando el servicio de archivos compartido.
+
+## Avance de implementación
+
+- El tanque determina combustible y unidad; la carga solo acepta un tanque activo del mismo vehículo y no supera su capacidad.
+- Los resúmenes separan combustible, unidad y moneda. Gasolina usa litros; GNV admite metros cúbicos o kilogramos.
+- El costo total, odómetro y proveedor se guardan; el precio unitario se calcula desde el costo y la cantidad para evitar valores divergentes. La web filtra cargas y resumen por combustible y rango de fechas del calendario operativo de `America/La_Paz`.
+- El comprobante adjunto queda pendiente de una extensión explícita del contrato de archivos de mvp-base para asociar archivos a cargas de combustible; no se crea almacenamiento paralelo.

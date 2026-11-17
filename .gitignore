@@ -1,0 +1,12 @@
+node_modules/
+**/node_modules/
+dist/
+coverage/
+/apps/api/src/prisma/generated/
+.data/
+**/.data/
+/.env
+/.env.local
+**/.env.local
+**/.env.*.local
+/mvp-base/.env
