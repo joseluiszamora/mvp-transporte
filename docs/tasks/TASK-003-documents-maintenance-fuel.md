@@ -52,5 +52,6 @@ Dar seguimiento documental, preventivo/correctivo y de cargas de combustible a l
 - `/maintenance/upcoming` y la pantalla de mantenimiento muestran planes dentro de su ventana operativa o con el odómetro objetivo alcanzado.
 - Las fechas de mantenimiento y las comprobaciones de vencimiento de documentos durante viajes usan el día calendario de `America/La_Paz`, de forma consistente con la planificación de viajes.
 - Los filtros de combustible, el cálculo visual de vigencias y la captura de fechas en web también usan el calendario operativo de `America/La_Paz`, independiente del huso del navegador.
+- La API autoriza la carga documental antes de acumular el cuerpo multipart en memoria y responde `413 REQUEST_TOO_LARGE` cuando el parser excede el límite.
 - TASK-003 sigue en curso hasta completar la verificación funcional de archivos con una sesión local. La asociación de comprobantes de combustible requiere una tarea explícita para extender el contrato de mvp-base.
 - Se realizó typecheck de API/web y build de `shared-contracts`; no se ejecutaron pruebas ni se compiló el APK por indicación del propietario.

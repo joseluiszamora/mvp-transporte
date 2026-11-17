@@ -36,4 +36,5 @@ Cerrar el alcance inicial y preparar una versión revisable de mvp-transporte.
 - La web y la app móvil ahora interpretan y presentan fechas operativas en `America/La_Paz`, aunque el navegador o dispositivo tenga otra zona horaria.
 - Las APIs de viajes y combustible rechazan fechas sin zona horaria y calendarios imposibles; los clientes deben enviar instantes RFC 3339 explícitos.
 - El cliente de mvp-base limita HTTP a loopback, exige HTTPS para hosts remotos y rechaza redirecciones para proteger las credenciales de integración y de usuario.
+- La carga de documentos valida sesión y permisos antes de leer el cuerpo multipart; los cuerpos que superan el límite responden con un error HTTP 413 explícito.
 - Las comprobaciones funcionales de aislamiento, archivos y recorridos web/móvil siguen pendientes; no se ejecutaron pruebas ni se preparó el tag de versión.

@@ -98,6 +98,13 @@ interface ResolvedOwner {
   branchId: string | null;
 }
 
+interface DocumentUploadContext {
+  ownerType: DocumentOwnerType;
+  ownerId: string;
+  token: string;
+  target: AuthorizedTarget;
+}
+
 async function resolveOwner(
   database: PrismaClient,
   base: BaseIntegrationClient,
@@ -189,7 +196,7 @@ export function createResourcesRouter(database: PrismaClient, base: BaseIntegrat
     response.status(200).json({ items: await listDocuments(database, base, token, ownerType, ownerId, target) });
   }));
 
-  router.post("/documents/:ownerType/:ownerId/upload", express.raw({ type: "multipart/form-data", limit: "11mb" }), asyncRoute(async (request, response) => {
+  router.post("/documents/:ownerType/:ownerId/upload", asyncRoute(async (request, response, next) => {
     const ownerType = enumValue(request.params.ownerType, ["VEHICLE", "EMPLOYEE"] as const, "El tipo de recurso");
     const ownerId = id(request.params.ownerId, "El recurso");
     const token = bearer(request);
@@ -197,6 +204,10 @@ export function createResourcesRouter(database: PrismaClient, base: BaseIntegrat
     const target = await authorizeOwner(base, token, owner, "transport.documents.manage");
     await authorizeOwner(base, token, owner, permissionForFiles(ownerType, "upload"));
     await base.authorize(token, "transport.audit.write", target.companyId, target.branchId);
+    response.locals.documentUploadContext = { ownerType, ownerId, token, target } satisfies DocumentUploadContext;
+    next();
+  }), express.raw({ type: "multipart/form-data", limit: "11mb" }), asyncRoute(async (request, response) => {
+    const { ownerType, ownerId, token, target } = response.locals.documentUploadContext as DocumentUploadContext;
     const contentType = request.get("content-type") ?? "";
     if (!/^multipart\/form-data\s*;\s*boundary=/iu.test(contentType) || !Buffer.isBuffer(request.body) || request.body.length === 0) {
       throw new ApiError(400, "INVALID_UPLOAD", "Selecciona un archivo PDF o imagen válido.");

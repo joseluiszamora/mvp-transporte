@@ -23,6 +23,10 @@ export function createErrorHandler(): ErrorRequestHandler {
       response.status(error.status).json({ error: { code: error.code, message: error.message, requestId } });
       return;
     }
+    if (typeof error === "object" && error !== null && "type" in error && error.type === "entity.too.large") {
+      response.status(413).json({ error: { code: "REQUEST_TOO_LARGE", message: "El archivo supera el tamaño permitido.", requestId } });
+      return;
+    }
     if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
       response.status(409).json({ error: { code: "RESOURCE_CONFLICT", message: "El recurso ya existe en esta empresa.", requestId } });
       return;
