@@ -115,12 +115,31 @@ function mapBranch(value: unknown, expectedCompanyId: string): BranchOption {
   return { id: item.id, companyId: item.companyId, code: item.code, name: item.name, status };
 }
 
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/gu, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1") return true;
+  const octets = host.split(".");
+  return octets.length === 4 && octets[0] === "127" && octets.every((octet) => /^\d{1,3}$/u.test(octet) && Number(octet) <= 255);
+}
+
 export class BaseIntegrationClient {
   private readonly baseUrl: string;
   private readonly secret: string;
 
   constructor(baseApiUrl: string, secret: string) {
-    this.baseUrl = baseApiUrl.replace(/\/+$/u, "");
+    let url: URL;
+    try {
+      url = new URL(baseApiUrl);
+    } catch {
+      throw new Error("MVP_BASE_API_URL debe ser una URL HTTP(S) válida.");
+    }
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password || url.search || url.hash) {
+      throw new Error("MVP_BASE_API_URL debe usar HTTP(S) y no incluir credenciales, consulta ni fragmento.");
+    }
+    if (url.protocol === "http:" && !isLoopbackHost(url.hostname)) {
+      throw new Error("MVP_BASE_API_URL debe usar HTTPS fuera del equipo local.");
+    }
+    this.baseUrl = url.toString().replace(/\/+$/u, "");
     this.secret = secret;
   }
 
@@ -349,6 +368,7 @@ export class BaseIntegrationClient {
       return await fetch(`${this.baseUrl}${path}`, {
         method: options.method ?? "GET",
         headers,
+        redirect: "error",
         ...(options.rawBody ? { body: options.rawBody as unknown as BodyInit } : options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
         signal: AbortSignal.timeout(15_000),
       });

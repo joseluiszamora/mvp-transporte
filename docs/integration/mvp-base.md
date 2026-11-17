@@ -10,6 +10,8 @@ El contrato fue revisado en [la guía de APIs de producto de mvp-base](https://g
 
 Cada producto corre como API independiente y conserva su propia base PostgreSQL. Transporte usa `mvp_transport_local` en el puerto local 5433; mvp-base mantiene su puerto y esquema existentes. La web de Transporte corre en `http://localhost:5174`, la API de Transporte en `http://localhost:4100`, y la API local de Base se configura con `MVP_BASE_API_URL` (por defecto `http://localhost:4000/api/v1`).
 
+La API acepta HTTP para direcciones de loopback (`localhost`, `*.localhost`, `127.0.0.0/8` y `::1`) durante el desarrollo local. Para cualquier otro host, `MVP_BASE_API_URL` debe usar HTTPS. La URL no puede incluir credenciales, parámetros de consulta ni fragmentos. El cliente de Transporte no sigue redirecciones al enviar credenciales a mvp-base.
+
 Configura una credencial aleatoria de al menos 32 caracteres como servicio `transport` en `MVP_INTEGRATION_SECRETS_JSON` de mvp-base y como `MVP_BASE_INTEGRATION_KEY` en el `.env` raíz de Transporte. La clave se envía solo desde la API de Transporte en `X-MVP-Integration-Key`; no se incluye en Vite, el navegador ni la app móvil. En mvp-base agrega `http://localhost:5174` a `WEB_ORIGINS` para permitir login, renovación y cierre de sesión desde la web de Transporte.
 
 La web inicia sesión contra `/api/v1/auth/login` de mvp-base y recibe un access token, la organización seleccionada y un token CSRF. Conserva el access token solo en memoria; el refresh token permanece en la cookie HttpOnly de Base. La web conserva el valor CSRF en `sessionStorage` para renovar la sesión al recargar la página y envía `credentials: include` en las llamadas de autenticación. El cierre de sesión llama a `/api/v1/auth/logout` de Base.
