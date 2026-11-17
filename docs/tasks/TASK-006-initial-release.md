@@ -34,4 +34,5 @@ Cerrar el alcance inicial y preparar una versión revisable de mvp-transporte.
 - La especificación OpenAPI ahora describe `/openapi.json` como una ruta pública, en línea con su implementación.
 - Se actualizaron las referencias al pin actual del submódulo `mvp-base` a `1a2d0d4`; `97c5840` se conserva como la revisión histórica del contrato TASK-015.
 - La web y la app móvil ahora interpretan y presentan fechas operativas en `America/La_Paz`, aunque el navegador o dispositivo tenga otra zona horaria.
+- Las APIs de viajes y combustible rechazan fechas sin zona horaria y calendarios imposibles; los clientes deben enviar instantes RFC 3339 explícitos.
 - Las comprobaciones funcionales de aislamiento, archivos y recorridos web/móvil siguen pendientes; no se ejecutaron pruebas ni se preparó el tag de versión.

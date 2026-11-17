@@ -2,6 +2,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import type { DocumentOwnerType, FuelType, FuelUnit, MaintenanceRecordStatus, MaintenanceType, ResourceDocumentItem } from "@mvp-transporte/shared-contracts";
 import type { PrismaClient } from "../../prisma/generated/client.ts";
 import { ApiError } from "../../errors.ts";
+import { parseRfc3339DateTime } from "../../utils/parse-rfc3339-date-time.ts";
 import { getVehicle } from "../vehicles/vehicle-service.ts";
 import type { AuthorizedTarget, BaseIntegrationClient } from "../integrations/base-client.ts";
 import {
@@ -65,9 +66,7 @@ function dateOnly(value: unknown, label: string, optional = false): Date | null 
 }
 
 function dateTime(value: unknown, label: string, optional = false): Date | null {
-  if (optional && (value === undefined || value === null || value === "")) return null;
-  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new ApiError(400, "INVALID_REQUEST", `${label} no es válida.`);
-  return new Date(value);
+  return parseRfc3339DateTime(value, label, optional);
 }
 
 function enumValue<T extends string>(value: unknown, values: readonly T[], label: string): T {

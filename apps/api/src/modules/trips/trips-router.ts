@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
 import type { PrismaClient } from "../../prisma/generated/client.ts";
 import { ApiError } from "../../errors.ts";
+import { parseRfc3339DateTime } from "../../utils/parse-rfc3339-date-time.ts";
 import type { BaseIntegrationClient } from "../integrations/base-client.ts";
 import {
   createTrip,
@@ -14,7 +15,6 @@ import type { TripCommand } from "./trips-service.ts";
 import type { TripStatus, TripType } from "@mvp-transporte/shared-contracts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const dateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
 const tripTypes = new Set<TripType>(["DISTRIBUTION", "SHORT_ROUTE", "LONG_DISTANCE"]);
 const tripStatuses = new Set<TripStatus>(["PLANNED", "ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 
@@ -51,9 +51,8 @@ function text(value: unknown, label: string, max: number, required = true): stri
 }
 
 function dateTime(value: unknown, label: string): Date {
-  if (typeof value !== "string" || !dateTimePattern.test(value)) throw new ApiError(400, "INVALID_REQUEST", `${label} debe incluir fecha, hora y zona horaria.`);
-  const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime())) throw new ApiError(400, "INVALID_REQUEST", `${label} no es válido.`);
+  const parsed = parseRfc3339DateTime(value, label);
+  if (!parsed) throw new ApiError(400, "INVALID_REQUEST", `${label} no es válido.`);
   return parsed;
 }
 
